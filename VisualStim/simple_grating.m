@@ -1,0 +1,300 @@
+function simple_grating
+
+
+% Experiment ID
+result.animalid = 'test';
+result.hemisphere = 'left';
+result.animalrotation = 75;
+result.penetration = 1;
+result.protocol = 'grating';
+result.date = date;
+
+% RF
+xposStim = 0;
+yposStim = 0;
+result.position  =  [xposStim, yposStim];
+gf = 5;%.Gaussian width factor 5: reveal all .5 normal fall off
+
+% num repetitionsa
+result.repetitions  =  10;
+Bcol = 128; % Background 0 black, 255 white
+method = 'symmetric';
+%method = 'cut';
+
+%TODO circular aperture
+gtype = 'box';
+% gtype = 'sine';
+
+%timing
+isi = .5;
+stimduration = 2;
+
+% stimulus parameters as row vectors
+orientations = [0 45 90 135 180 225 270 315]; % will add 180 in 50% of the cases
+% sizes = [8 13 21 36 45];
+sizes = [20];
+light = [0];          % light on
+cyclesPerVisDeg = .04;   % spatial frequency
+cyclesPerSecond = 2;    % drift frequency
+contrast  = 1; 
+prestimtimems  =  0;
+
+% end params ------------------------------
+result.lightStamp  =  [];
+
+% create all stimulus conditions from the single parameter vectors
+nConds  =  [length(orientations) length(sizes) length(light)];
+allConds  =  prod(nConds);
+repPerCond  =  allConds./nConds;
+conds  =  [	reshape(repmat(orientations,repPerCond(1),1)',1,allConds);
+    reshape((sizes'*ones(1,allConds/(nConds(2))))',1,allConds);
+    repmat(reshape((light'*ones(1,allConds/(nConds(2)*nConds(3))))',1,allConds/nConds(2)),1,nConds(2));];
+
+% add control condition: grating of size 0 once with, once without light
+% for i = 1:length(light)
+%     conds(:,prod(nConds)+i) = [-1,0,light(i)]';
+%     allConds = allConds+1;
+% end
+
+resDir  =  ['/Users/vismac/data/' result.animalid '/'];
+if ~exist(resDir,'dir'),mkdir(resDir),end
+nexp  =  length(dir(fullfile(resDir,'*.mat')));
+fname  =  strcat(resDir, result.animalid,'_block',num2str(nexp+1),'.mat');
+
+xRes = 1920; yRes = 1080;
+% xRes = 800; yRes = 600;
+
+DScreen = 15;    %distance of animal from screen in cm
+VertScreenSize = 28;% vertical size of the screen in cm
+VertScreenDimDeg = atand(VertScreenSize/DScreen); % in visual degrees
+PixperDeg = yRes/VertScreenDimDeg;
+
+PatchRadiusPix = ceil(sizes.*PixperDeg/2); % radius!!
+
+x0 = floor(xRes/2 + xposStim*PixperDeg - sizes.*PixperDeg/2); 
+y0 = floor(yRes/2 - yposStim*PixperDeg - sizes.*PixperDeg/2);
+
+if any(x0<1) || any(y0<1)
+    disp('too big for the monitor, dude! try other parameters');
+    return;
+end
+
+% configure the mcc daq box
+daq  =  DaqDeviceIndex;
+DaqDConfigPort(daq,0,0); %stimulus on trigger
+DaqDConfigPort(daq,1,0); %light trigger
+
+AssertOpenGL;
+screens = Screen('Screens');
+screenNumber = max(screens);
+frameRate = Screen('FrameRate',screenNumber);
+if(frameRate == 0)  %if MacOSX does not know the frame rate the 'FrameRate' will return 0.
+    frameRate = 60;
+end
+result.frameRate  =  frameRate;
+
+white = WhiteIndex(screenNumber);
+black = BlackIndex(screenNumber);
+gray = (white+black)/2;
+if round(gray) == white
+    gray = black;
+end
+
+Screen('Preference', 'VBLTimestampingMode', -1);
+Screen('Preference','SkipSyncTests', 0);
+[w,rect] = Screen('OpenWindow',0);
+
+load('GammaTable.mat');
+CT = (ones(3,1)*correctedTable(:,2)')'/255;
+Screen('LoadNormalizedGammaTable',w, CT);
+
+bg = ones(yRes,xRes)*Bcol;
+BG = Screen('MakeTexture', w, bg);
+
+Screen('DrawTexture',w, BG);
+Screen('TextFont',w, 'Courier New');
+Screen('TextSize',w, 14);
+Screen('TextStyle', w, 1+2);
+Screen('DrawText', w, strcat(num2str(allConds),' Conditions__',num2str(result.repetitions),' Repeats__',num2str(allConds*result.repetitions*(isi+stimduration)/60),' min estimated Duration.'), 60, 50, [255 128 0]);
+Screen('DrawText', w, strcat('Filename:',fname,'    Hit any key to continue / q to abort.'), 60, 70, [255 128 0]);
+Screen('Flip',w);
+
+FlushEvents;
+[kinp,tkinp] = GetChar;
+if kinp == 'q'|kinp == 'Q',
+    Screen('CloseAll');
+    Priority(0);
+else
+
+    Screen('DrawTexture',w, BG);
+    Screen('Flip', w);
+    result.starttime  =  datestr(now);
+
+    width  =  PatchRadiusPix;
+
+    t0  =  GetSecs;
+    trnum = 0;
+
+    for itrial = 1:result.repetitions,
+        tmpcond = conds;
+        
+        % randomize direction 50/50%
+        for i = 1:length(orientations)
+%             rp = randperm((allConds-2)/length(orientations)); % -2 for the two control conditions with no grating visible
+
+            rp = randperm((allConds)/length(orientations)); % -2 for the two control conditions with no grating visible
+            thisoriinds = find(tmpcond(1,:) == orientations(i));
+            tmpcond(1,thisoriinds(rp(1:floor(length(rp)/2)))) = orientations(i)+180;
+        end
+        
+        conddone = 1:size(conds,2);
+        while ~isempty(tmpcond)
+            trnum = trnum+1;
+            trialstart = GetSecs-t0;
+            thiscondind = ceil(rand*size(tmpcond,2));
+            thiscond = tmpcond(:,thiscondind);
+            cnum = conddone(thiscondind);conddone(thiscondind)  =  [];
+
+            % Information to save in datafile:
+            Trialnum(trnum) = trnum;
+            Condnum(trnum) = cnum;
+            Repnum(trnum) = itrial;
+            Orientation(trnum) = thiscond(1); % don't do this anymore, now happens while building conds: +((randi(2)-1)*180);
+            Size(trnum) = thiscond(2);
+            Lgt(trnum)  =  thiscond(3);
+            spFreq(trnum) = cyclesPerVisDeg;
+            tFreq(trnum) = cyclesPerSecond;
+            Contrast(trnum) = contrast;
+            % end save information
+
+            tmpcond(:,thiscondind)  =  [];
+            thisdeg = Orientation(trnum);
+            thissize = thiscond(2);
+            thislight  =  thiscond(3);
+            thiscontrast = contrast;
+            thisfreq = cyclesPerVisDeg;
+            thisspeed = cyclesPerSecond;
+
+            ii = find(sizes==thissize) 
+            thiswidth = width(ii);
+            [x,y] = meshgrid([-thiswidth:thiswidth],[-thiswidth:thiswidth]);
+            
+            % Generate frames for trial
+            numFrames = ceil(frameRate/thisspeed);
+            clear tex;
+            for i = 1:numFrames,
+                clear T G;
+                phase = (i/numFrames)*2*pi;
+                
+                angle = thisdeg*pi/180; % 30 deg orientation.
+                f = (thisfreq)/PixperDeg*2*pi; % cycles/pixel
+                a = cos(angle)*f;
+                b = sin(angle)*f;
+                g0 = exp(-((x/(gf*thiswidth)).^2)-((y/(gf*thiswidth)).^2));
+                if streq(gtype,'sine'),
+                    G0 = g0.*sin(a*x+b*y+phase);
+                elseif streq(gtype,'box'),
+                    s = sin(a*x+b*y+phase);
+                    ext = max(max(max(s)),abs(min(min(s))));
+                    G0=ext*((s>0)-(s<0));%.*g0;
+                end
+                if streq(method,'symmetric'),
+                    incmax = min(255-Bcol,Bcol);
+                    G = (floor(thiscontrast*(incmax*G0)+Bcol));
+                elseif streq(method,'cut'),
+                    incmax = max(255-Bcol,Bcol);
+                    G = (floor(thiscontrast*(incmax*G0)+Bcol));
+                    G = max(G,0);G = min(G,255);
+                end
+
+                T = bg;
+                T(y0(ii):y0(ii)+size(G,2)-1,x0(ii):x0(ii)+size(G,2)-1) = G;
+                tex(i) = Screen('MakeTexture', w, T);
+            end
+
+            movieDurationSecs = stimduration;
+            movieDurationFrames = round(movieDurationSecs * frameRate);
+            movieFrameIndices = mod(0:(movieDurationFrames-1), numFrames) + 1;
+            priorityLevel = MaxPriority(w);
+            Priority(priorityLevel);
+
+            %ISI
+            Screen('DrawTexture',w,BG);
+            Screen('DrawText', w, ['trial ' int2str(trnum) '/' int2str(allConds) 'repetition ' int2str(itrial) '/' int2str(result.repetitions)], 0, 0, [255,0,0]);
+            
+            Screen('Flip', w);
+            WaitSecs(max(0,isi-((GetSecs-t0)-trialstart)));
+            
+            Screen('DrawTexture',w,BG);
+            fliptime  =  Screen('Flip', w);
+            WaitSecs(max(0,prestimtimems/1000));
+            
+            % last flip before movie starts
+            Screen('DrawTexture',w,BG);
+            fliptime  =  Screen('Flip', w);
+            result.timestamp(trnum)  =  fliptime - t0;
+            
+%             disp(['trnum: ' num2str(trnum) '   ts: ' num2str(result.timestamp(trnum))]);
+            stimstart  =  GetSecs-t0;
+            
+            % send light trigger
+            DaqDOut(daq,1,0);
+            DaqDOut(daq,1,255);
+            DaqDOut(daq,1,0);
+            
+            %STIMULATION
+            if thislight
+                Screen('DrawTexture',w,BG);
+                fliptime  =  Screen('Flip', w);
+            end
+            
+                        
+            % show stimulus
+            for i = 1:movieDurationFrames
+                Screen('DrawTexture', w, tex(movieFrameIndices(i)));
+                Screen('Flip', w);
+                % send stim on trigger
+                DaqDOut(daq,0,0);
+                DaqDOut(daq,0,255);
+                DaqDOut(daq,0,0);
+            end
+            
+            stimt = GetSecs-t0-stimstart;
+            result.lightStamp  =  [result.lightStamp, fliptime-t0];
+            Screen('DrawTexture',w,BG);
+            Screen('Flip', w);
+            Screen('Close',tex(:));
+            
+            [keyIsDown, secs, keyCode] = KbCheck;
+            if keyIsDown & KbName(keyCode) == 'p'
+                KbWait([],2); %wait for all keys to be released and then any key to be pressed again
+            end
+            
+        end
+    end
+
+    result.stimulusIndex  =  Condnum;
+    gratingInfo.Orientation  =  Orientation; gratingInfo.Contrast  =  Contrast; gratingInfo.spFreq  =  spFreq;
+    gratingInfo.tFreq  =  tFreq; gratingInfo.size = Size;
+    gratingInfo.gf  =  gf; gratingInfo.Bcol  =  Bcol; gratingInfo.method  =  method;
+    result.isi  =  isi; result.stimduration  =  stimduration; 
+    result.dispInfo.xRes  =  xRes; result.dispInfo.yRes  =  yRes;
+    result.dispInfo.DScreen  =  DScreen; result.dispInfo.VertScreenSize  =  VertScreenSize;
+    result.light  =  Lgt;
+    result.delaySV  =  prestimtimems;
+    
+    result.gratingInfo  =  gratingInfo;
+    
+    save(fname, 'result');
+
+    Screen('DrawTexture',w,BG);
+    Screen('DrawText', w, sprintf('Done. Press any key.', 300,40,[255 0 0]));
+    Screen('Flip', w);
+
+    FlushEvents;
+    [kinp,tkinp] = GetChar;
+    Screen('CloseAll');
+    Priority(0);
+
+end
+
