@@ -9,7 +9,11 @@ if ~exist('ExpFile', 'var') || isempty(ExpFile)
     end
     ExpFile = fullfile(p,ExpFile);
 end
-fprintf('Analyzing ''%s'':\n',ExpFile);
+if exist(ExpFile,'file')
+    fprintf('Analyzing ''%s'':\n',ExpFile);
+else
+    error('File %s does not exist!',ExpFile);
+end
 
 
 %% Load in data

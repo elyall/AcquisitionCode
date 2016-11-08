@@ -9,7 +9,11 @@ if ~exist('ImageFile', 'var') || isempty(ImageFile)
     end
     ImageFile = fullfile(p,ImageFile);
 end
-fprintf('Analyzing ''%s'':\n',ImageFile);
+if exist(ImageFile,'file')
+    fprintf('Analyzing ''%s'':\n',ImageFile);
+else
+    error('File %s does not exist!',ImageFile);
+end
 
 
 %% Determine # of trials
