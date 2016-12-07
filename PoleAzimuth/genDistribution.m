@@ -41,6 +41,10 @@ if ~iscell(Weights)
     Weights = {Weights};
 end
 
+if strcmp(Distribution, 'random') && N == 0
+    N = 1000;
+    warning('Distribution->''random'' & N=0 => setting N to be 1000'); 
+end
         
 %% Generate points
 numDims = size(input,1);

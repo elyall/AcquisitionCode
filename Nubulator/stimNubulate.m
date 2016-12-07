@@ -90,7 +90,8 @@ gd.fig = figure(...
     'Name',                 'Stimulus: Nubulate',...
     'ToolBar',              'none',...
     'Units',                Display.units,...
-    'Position',             Display.position);
+    'Position',             Display.position,...
+    'KeyPressFcn',          @(hObject,eventdata)KeyPressCallback(hObject, eventdata, guidata(hObject)));
 
 % SAVING DATA
 % panel
@@ -548,25 +549,27 @@ if hObject.Value
             
             % Add ports
             % Pistons
-            activePorts = find(gd.Experiment.stim.setup.Active);
-            for index = activePorts'
-                [~,id] = DAQ.addDigitalChannel('Dev1',gd.Experiment.stim.setup.Port(index),'OutputOnly');
-                DAQ.Channels(id).Name = strcat('O_Piston',index);
+            [~,id] = DAQ.addDigitalChannel('Dev1',gd.Experiment.stim.setup.Port(gd.Experiment.stim.setup.Active),'OutputOnly');
+            for index = id
+                DAQ.Channels(index).Name = strcat('O_Piston_',gd.Experiment.stim.setup.Name{index});
             end
-            % Imaging Computer Trigger (for timing)
+            % Imaging Computer Trigger
             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
             DAQ.Channels(id).Name = 'O_2PTrigger';
+            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
+            DAQ.Channels(id).Name = 'I_FrameCounter';
             % Running Wheel
             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
             DAQ.Channels(id(1)).Name = 'I_RunWheelA';
             DAQ.Channels(id(2)).Name = 'I_RunWheelB';
             DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
 %             % Whisker tracking
-%             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1:2','OutputOnly');
-%             DAQ.Channels(id(1)).Name = 'O_WhiskerTracker';
-%             DAQ.Channels(id(2)).Name = 'O_WhiskerIllumination';
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line3','InputOnly');
-            DAQ.Channels(id).Name = 'I_WhiskerTracker';
+%             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line17','OutputOnly');
+%             DAQ.Channels(id).Name = 'O_WhiskerTracker';
+%             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line2','OutputOnly');
+%             DAQ.Channels(id).Name = 'O_WhiskerIllumination';
+%             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line18','InputOnly');
+%             DAQ.Channels(id).Name = 'I_WhiskerTracker';
             % Cleanup
             DAQChannels = {DAQ.Channels(:).Name};
             OutChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'O_')));
@@ -626,16 +629,16 @@ if hObject.Value
             % Trigger imaging computer on every single trial
             gd.Experiment.blankTriggers([startTrig, endTrig], strcmp(OutChannels, 'O_2PTrigger')) = 1; % trigger at beginning and end of stimulus
             
-            % Trigger whisker tracking camera on every single trial
-            if gd.Experiment.timing.ITI >= 0.01;
-                gd.Experiment.blankTriggers(startTrig-ceil(DAQ.Rate/100):endTrig, strcmp(OutChannels, 'O_WhiskerIllumination')) = 1; % start LED a little before the start of imaging
-                gd.Experiment.blankTriggers(startTrig:ceil(DAQ.Rate/gd.Experiment.params.frameRateWT):endTrig, strcmp(OutChannels, 'O_WhiskerTracker')) = 1; % image during stimulus period
-            else
-                gd.Experiment.blankTriggers(:, strcmp(OutChannels, 'O_WhiskerIllumination')) = 1; % image during entire time
-                gd.Experiment.blankTriggers(1:ceil(DAQ.Rate/gd.Experiment.params.frameRateWT):endTrig, strcmp(OutChannels, 'O_WhiskerTracker')) = 1; % image during entire time
-            end
-            % gd.Experiment.blankTriggers(1, strcmp(OutChannels, 'O_WhiskerTracker')) = 1;        % mode 15 limited to 255 frames
-            % gd.Experiment.blankTriggers(stopMove1, strcmp(OutChannels, 'O_WhiskerTracker')) = 1;
+%             % Trigger whisker tracking camera on every single trial
+%             if gd.Experiment.timing.ITI >= 0.01;
+%                 gd.Experiment.blankTriggers(startTrig-ceil(DAQ.Rate/100):endTrig, strcmp(OutChannels, 'O_WhiskerIllumination')) = 1; % start LED a little before the start of imaging
+%                 gd.Experiment.blankTriggers(startTrig:ceil(DAQ.Rate/gd.Experiment.params.frameRateWT):endTrig, strcmp(OutChannels, 'O_WhiskerTracker')) = 1; % image during stimulus period
+%             else
+%                 gd.Experiment.blankTriggers(:, strcmp(OutChannels, 'O_WhiskerIllumination')) = 1; % image during entire time
+%                 gd.Experiment.blankTriggers(1:ceil(DAQ.Rate/gd.Experiment.params.frameRateWT):endTrig, strcmp(OutChannels, 'O_WhiskerTracker')) = 1; % image during entire time
+%             end
+%             % gd.Experiment.blankTriggers(1, strcmp(OutChannels, 'O_WhiskerTracker')) = 1;        % mode 15 limited to 255 frames
+%             % gd.Experiment.blankTriggers(stopMove1, strcmp(OutChannels, 'O_WhiskerTracker')) = 1;
             
             % Build up vector to display when stimulus is present
             gd.Experiment.Stimulus = zeros(size(gd.Experiment.blankTriggers,1), 1);
@@ -833,11 +836,10 @@ end
     function QueueData(src,eventdata)
         
         % Queue trial
-        if currentTrial < str2double(numTrialsObj.String) && hObject.Value
+        if currentTrial < str2double(numTrialsObj.String) && hObject.Value % hasn't reached end of experiment and user hasn't quit
             
             % Update index
             currentTrial = currentTrial + 1;
-            ExperimentReachedEnd = false;
         
             blockIndex = rem(currentTrial-1, numStimuliCurrentBlock)+1;
             % If starting new block, shuffle the stimuli order
@@ -852,7 +854,7 @@ end
                 DAQ.queueOutputData(BaseTriggers);
             else                                                                % current trial is not control trial
                 CurrentTriggers = BaseTriggers;
-                CurrentTriggers(:,PistonCombinations{TrialInfo.StimID(currentTrial)+ControlTrial}) = repmat(PistonTrigger, 1, numel(PistonCombinations{TrialInfo.StimID(currentTrial)}+ControlTrial));
+                CurrentTriggers(:,PistonCombinations{TrialInfo.StimID(currentTrial)}) = repmat(PistonTrigger, 1, numel(PistonCombinations{TrialInfo.StimID(currentTrial)}));
                 DAQ.queueOutputData(CurrentTriggers);
             end
             BufferStim = cat(1, BufferStim, Stimulus*currentTrial);
@@ -863,11 +865,11 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
-        elseif ~isempty(StimuliToRepeat) % Repeat bad trials
+        elseif ~isempty(StimuliToRepeat) && hObject.Value % reached end of experiment & user hasn't quit -> repeat bad trials
             
             % Update index
             currentTrial = currentTrial + 1;
-            ExperimentReachedEnd = false;
+            ExperimentReachedEnd = false; % refresh in case mouse doesn't run in very last trial presented
             
             % Queue triggers
             TrialInfo.StimID(currentTrial) = StimuliToRepeat(1);                % determine StimID for current trial
@@ -887,7 +889,7 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
-        elseif currentTrial >= str2double(numTrialsObj.String) && ~ExperimentReachedEnd
+        elseif ~ExperimentReachedEnd % queue blank trial at very end
             % Queue blank trial to ensure last trial does not have to be
             % repeated and to ensure no imaging frames get clipped
             DAQ.queueOutputData(zeros(numScansPerTrial, numel(OutChannels)));

@@ -16,12 +16,8 @@ gd.Experiment.saving.DataFile = '';
 gd.Experiment.saving.dataPrecision = 'uint16';
 
 gd.Experiment.params.samplingFrequency = 5000;
-gd.Experiment.params.threshold = 100; %deg/sec
+gd.Experiment.params.threshold = 100; %deg/s
 gd.Experiment.params.duration = 60; %minutes
-
-gd.Experiment.punish.delay = 10; %sec
-gd.Experiment.punish.volume = 1;
-gd.Experiment.punish.duration = 1; %sec
 
 gd.Internal.buffer.seconds = 6;
 gd.Internal.buffer.downSample = 20;
@@ -259,9 +255,8 @@ if hObject.Value
                     return
                 end
             end
-            SaveFile = gd.Experiment.saving.SaveFile;
-            % bin file
-            gd.Experiment.DataFile = strcat(gd.Experiment.saving.SaveFile(1:end-4), '.bin');
+            SaveFile = gd.Experiment.saving.SaveFile; % bin file
+            gd.Experiment.DataFile = strcat(strtok(gd.Experiment.saving.SaveFile,'.'), '.bin');
             DataFile = gd.Experiment.DataFile;
         else
             gd.Experiment.saving.save = false;
@@ -282,10 +277,8 @@ if hObject.Value
         
         % Add ports
         % Output port
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line16','OutputOnly');
-        DAQ.Channels(id).Name = 'O_Speaker';
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line17','OutputOnly');
-        DAQ.Channels(id).Name = 'O_Air';
+        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
+        DAQ.Channels(id).Name = 'O_2PTrigger';
         % Running Wheel
         [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
         DAQ.Channels(id(1)).Name = 'I_RunWheelA';
@@ -307,21 +300,21 @@ if hObject.Value
         
         % Add QueueData callback
         DAQ.addlistener('DataRequired', @QueueData); % create listener for queueing trials
-        DAQ.NotifyWhenScansQueuedBelow = DAQ.Rate*gd.Experiment.punish.duration;
+        DAQ.NotifyWhenScansQueuedBelow = DAQ.Rate-1; % queue more data when less than a second of data left
         % Add DataIn callback
         DAQ.addlistener('DataAvailable', @SaveDataIn);
-        DAQ.NotifyWhenDataAvailableExceeds = DAQ.Rate/100;
+        % DAQ.NotifyWhenDataAvailableExceeds = DAQ.Rate/100;
         
         
         %% Create triggers
         gd.Experiment.Triggers = zeros(round(gd.Experiment.params.samplingFrequency), numel(OutChannels));
         
-        gd.Experiment.PunishTriggers = 
+        
         %% Initialize saving
         Experiment = gd.Experiment;
         if gd.Experiment.saving.save
             save(SaveFile, 'DAQChannels', 'Experiment', '-mat', '-v7.3');
-            H_DataFile = fopen(gd.Experiment.saving.DataFile, 'w');
+            H_DataFile = fopen(DataFile, 'w');
         end
         
         
@@ -384,6 +377,8 @@ if hObject.Value
             save(SaveFile, 'Experiment', '-append'); % update with "Experiment.timing.finish" info
             fclose(H_DataFile);                      % close binary file
         end
+        
+        fprintf('\tTraining finished at %s\n',datestr(now));
         
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
