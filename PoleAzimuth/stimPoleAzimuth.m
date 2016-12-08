@@ -47,37 +47,25 @@ gd.Internal.buffer.downSample = 30;
 
 
 %% Parse input arguments
-index = 1;
-while index<=length(varargin)
-    try
-        switch varargin{index}
-            case 'trialDuration'
-                gd.Experiment.timing.trialDuration = varargin{index+1};
-                index = index + 2;
-            case 'preDuration'
-                gd.Experiment.timing.preDuration = varargin{index+1};
-                index = index + 2;
-            case 'stimDuration'
-                gd.Experiment.timing.stimDuration = varargin{index+1};
-                index = index + 2;
-            case 'numPositions'
-                gd.Experiment.stim.numPositions = varargin{index+1};
-                index = index + 2;
-            case 'distBetween'
-                gd.Experiment.stim.distBetweenPositions = varargin{index+1};
-                index = index + 2;
-            case 'control'
-                gd.Experiment.params.catchTrials = varargin{index+1};
-                index = index + 2;
-            otherwise
-                warning('Argument ''%s'' not recognized',varargin{index});
-                index = index + 1;
-        end
-    catch
-        warning('Argument %d not recognized',index);
-        index = index + 1;
-    end
-end
+% index = 1;
+% while index<=length(varargin)
+%     try
+%         switch varargin{index}
+%             case 'stimDuration'
+%                 gd.Experiment.timing.stimDuration = varargin{index+1};
+%                 index = index + 2;
+%             case 'control'
+%                 gd.Experiment.params.catchTrials = varargin{index+1};
+%                 index = index + 2;
+%             otherwise
+%                 warning('Argument ''%s'' not recognized',varargin{index});
+%                 index = index + 1;
+%         end
+%     catch
+%         warning('Argument %d not recognized',index);
+%         index = index + 1;
+%     end
+% end
 
 if exist('SaveFile', 'var')
     gd.Experiment.saving.SaveFile = SaveFile;
@@ -398,14 +386,13 @@ gd.Parameters.ITI = uicontrol(...
     'Units',                'normalized',...
     'Position',             [w1+w2,.8,w3,.1]);
 % random interval toggle
-gd.Parameters.randomITIToggle = uicontrol(...
+gd.Parameters.randomITI = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Add random ITI?',...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'Position',             [0,.7,w1,.1],...
-    'UserData',             {[.94,.94,.94;0,1,0],'Add random ITI?','Adding random ITI'},...
-    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+    'Callback',             @(hObject,eventdata)toggleRandomITI(hObject,eventdata,guidata(hObject)));
 % random interval max
 gd.Parameters.randomITIText = uicontrol(...
     'Style',                'text',...
@@ -413,12 +400,14 @@ gd.Parameters.randomITIText = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'HorizontalAlignment',  'right',...
+    'Enable',               'off',...
     'Position',             [w1,.7,w2,.1]);
 gd.Parameters.randomITImax = uicontrol(...
     'Style',                'edit',...
     'String',               gd.Experiment.timing.randomITImax,...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
+    'Enable',               'off',...
     'Position',             [w1+w2,.7,w3,.1]);
 % catch trial toggle
 gd.Parameters.control = uicontrol(...
@@ -427,13 +416,13 @@ gd.Parameters.control = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'Position',             [0,.6,w1,.1],...
-    'UserData',             {[.94,.94,.94;0,1,0],'Catch Trials?','Sending catch trials'},...
-    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+    'Callback',             @(hObject,eventdata)toggleCatchTrials(hObject,eventdata,guidata(hObject)));
 % number of catch trials
 gd.Parameters.controlText = uicontrol(...
     'Style',                'text',...
     'String',               '# Per Block',...
     'Parent',               gd.Parameters.panel,...
+    'Enable',               'off',...
     'Units',                'normalized',...
     'HorizontalAlignment',  'right',...
     'Position',             [w1,.6,w2,.1]);
@@ -441,6 +430,7 @@ gd.Parameters.controlNum = uicontrol(...
     'Style',                'edit',...
     'String',               gd.Experiment.params.numCatchesPerBlock,...
     'Parent',               gd.Parameters.panel,...
+    'Enable',               'off',...
     'Units',                'normalized',...
     'Position',             [w1+w2,.6,w3,.1]);
 % repeat bad trials toggle
@@ -451,13 +441,13 @@ gd.Parameters.repeatBadTrials = uicontrol(...
     'Value',                gd.Experiment.params.repeatBadTrials,...
     'Units',                'normalized',...
     'Position',             [0,.5,w1,.1],...
-    'UserData',             {[.94,.94,.94;0,1,0],'Repeat bad trials?','Repeating bad trials'},...
-    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+    'Callback',             @(hObject,eventdata)toggleRepeatBadTrials(hObject,eventdata,guidata(hObject)));
 % bad trial mean velocity threshold
 gd.Parameters.goodVelocityThresholdText = uicontrol(...
     'Style',                'text',...
     'String',               'Threshold (deg/s)',...
     'Parent',               gd.Parameters.panel,...
+    'Enable',               'off',...
     'Units',                'normalized',...
     'HorizontalAlignment',  'right',...
     'Position',             [w1,.5,w2,.1]);
@@ -465,22 +455,23 @@ gd.Parameters.goodVelocityThreshold = uicontrol(...
     'Style',                'edit',...
     'String',               gd.Experiment.params.speedThreshold,...
     'Parent',               gd.Parameters.panel,...
+    'Enable',               'off',...
     'Units',                'normalized',...
     'Position',             [w1+w2,.5,w3,.1]);
 % whisker imaging toggle
-gd.Parameters.wtToggle = uicontrol(...
+gd.Parameters.whiskerTracking = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Trigger Camera?',...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'Position',             [0,.4,2*w1/3,.1],...
-    'UserData',             {[.94,.94,.94;0,1,0],'Trigger Camera?','Triggering Camera'},...
-    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+    'Callback',             @(hObject,eventdata)toggleWhiskerTracking(hObject,eventdata,guidata(hObject)));
 % whisker imaging type
 gd.Parameters.wtType = uicontrol(...
     'Style',                'togglebutton',...
     'String',               'Frame',...
     'Parent',               gd.Parameters.panel,...
+    'Enable',               'off',...
     'Units',                'normalized',...
     'Position',             [2*w1/3,.4,w1/3,.1],...
     'UserData',             {[.94,.94,.94;1,1,1],'Frame','Trial'},...
@@ -490,6 +481,7 @@ gd.Parameters.wtFrameRateText = uicontrol(...
     'Style',                'text',...
     'String',               'Frame Rate (Hz)',...
     'Parent',               gd.Parameters.panel,...
+    'Enable',               'off',...
     'Units',                'normalized',...
     'HorizontalAlignment',  'right',...
     'Position',             [w1,.4,w2,.1]);
@@ -497,6 +489,7 @@ gd.Parameters.wtFrameRate = uicontrol(...
     'Style',                'edit',...
     'String',               gd.Experiment.params.frameRateWT,...
     'Parent',               gd.Parameters.panel,...
+    'Enable',               'off',...
     'Units',                'normalized',...
     'Position',             [w1+w2,.4,w3,.1],...
     'Callback',             @(hObject,eventdata)ChangeWTFrameRate(hObject,eventdata,guidata(hObject)));
@@ -557,6 +550,7 @@ gd.Run.runSpeedAxes = axes(...
     'Units',                'normalized',...
     'Position',             [.075,.075,.9,.7]);
 
+guidata(gd.fig, gd); % save guidata
 
 %% Initialize Defaults
 
@@ -573,17 +567,35 @@ switch gd.Internal.ImagingType % set initial selection
         gd.Parameters.imagingType.Value = 2;
 end
 
+% Add random ITI
+if gd.Experiment.params.randomITI
+    gd.Parameters.randomITI.Value = true;
+    toggleRandomITI(gd.Parameters.randomITI,[],gd);
+end
+% Present catch trials
+if gd.Experiment.params.catchTrials
+    gd.Parameters.control.Value = true;
+    toggleCatchTrials(gd.Parameters.control,[],gd);
+end
+% Repeat bad trials
+if gd.Experiment.params.repeatBadTrials
+    gd.Parameters.repeatBadTrials.Value = true;
+    toggleRepeatBadTrials(gd.Parameters.repeatBadTrials,[],gd);
+end
+% Trigger whisker tracking camera
+if gd.Experiment.params.whiskerTracking
+    gd.Parameters.whiskerTracking.Value = true;
+    toggleWhiskerTracking(gd.Parameters.whiskerTracking,[],gd);
+end
 % Block shuffle
 if gd.Experiment.params.blockShuffle
     set(gd.Parameters.shuffle,'Value',true,'String','Shuffling blocks','BackgroundColor',[0,1,0]);
 end
-
 % Record velocity
 if gd.Experiment.params.runSpeed
     set(gd.Parameters.runSpeed,'Value',true,'String','Recording velocity','BackgroundColor',[0,1,0]);
 end
 
-guidata(gd.fig, gd); % save guidata
 CreateFilename(gd.Saving.FullFilename, [], gd);
 
 % For timing
@@ -592,16 +604,8 @@ CreateFilename(gd.Saving.FullFilename, [], gd);
 % RunExperiment(gd.Run.run,[],gd); % timing debugging
 end
 
-%% Callbacks
-function ImagingSelection(hObject, eventdata, gd)
-if isequal(gd.Saving.tabgroup.SelectedTab, gd.Saving.scim.tab)
-    gd.Internal.ImagingType = 'scim';
-elseif isequal(gd.Saving.tabgroup.SelectedTab, gd.Saving.sbx.tab)
-    gd.Internal.ImagingType = 'sbx';
-end
-guidata(hObject, gd);
-end
 
+%% FILENAME CALLBACKS
 function ChooseDir(hObject, eventdata, gd)
 temp = uigetdir(gd.Internal.save.path, 'Choose directory to save to');
 if ischar(temp)
@@ -630,16 +634,6 @@ end
 CreateFilename(gd.Saving.FullFilename, [], gd);
 end
 
-function toggleSave(hObject, eventdata, gd)
-if hObject.Value
-    hObject.BackgroundColor = [0,1,0];
-    hObject.String = 'Saving';
-else
-    hObject.BackgroundColor = [1,0,0];
-    hObject.String = 'Save?';
-end
-end
-
 function CreateFilename(hObject, eventdata, gd)
 gd.Experiment.saving.SaveFile = fullfile(gd.Internal.save.path, strcat(gd.Saving.base.String, '_', gd.Saving.depth.String, '_', gd.Saving.index.String, '.exp'));
 hObject.String = gd.Experiment.saving.SaveFile;
@@ -651,7 +645,19 @@ else
 end
 end
 
+
 %% CONTROLS CALLBACKS
+
+function stepCCW(hObject, eventdata, gd)
+moveStepperMotor(str2num(gd.Controls.stepAngle.String), gd.Experiment.params.samplingFrequency, 1, 2, true, 2);
+fprintf('Motor: Stepper motor moved %d degrees CCW\n', str2num(gd.Controls.stepAngle.String));
+end
+
+function stepCW(hObject, eventdata, gd)
+moveStepperMotor(-str2num(gd.Controls.stepAngle.String), gd.Experiment.params.samplingFrequency, 1, 2, true, 2);
+fprintf('Motor: Stepper motor moved %d degrees CW\n', str2num(gd.Controls.stepAngle.String));
+end
+
 function linearMotorPos(hObject, eventdata, gd)
 if str2num(hObject.String) < 0
     hObject.String = '0';
@@ -676,26 +682,6 @@ switch hObject.UserData
 end
 end
 
-function stepCCW(hObject, eventdata, gd)
-moveStepperMotor(str2num(gd.Controls.stepAngle.String), gd.Experiment.params.samplingFrequency, 1, 2, true, 2);
-fprintf('Motor: Stepper motor moved %d degrees CCW\n', str2num(gd.Controls.stepAngle.String));
-end
-
-function stepCW(hObject, eventdata, gd)
-moveStepperMotor(-str2num(gd.Controls.stepAngle.String), gd.Experiment.params.samplingFrequency, 1, 2, true, 2);
-fprintf('Motor: Stepper motor moved %d degrees CW\n', str2num(gd.Controls.stepAngle.String));
-end
-
-function ChangeWTFrameRate(hObject,eventdata,gd)
-newValue = str2num(hObject.String);
-if newValue <= 0
-    newValue = .0000001;
-    hObject.String = num2str(newValue);
-end
-gd.Experiment.params.frameRateWT = newValue;
-guidata(hObject, gd);
-end
-
 
 %% STIMULI CALLBACKS
 function LoadStimuli(hObject, eventdata, gd)
@@ -709,7 +695,7 @@ fprintf('Loaded stimuli from: %s\n', fullfile(p,f));
 
 % Load stimuli
 gd.Stimuli.list.Data = num2cell(stimuli); % display stimuli
-gd.Experiment.Position = stimuli; % Save loaded stimuli
+gd.Experiment.Position = stimuli;         % save loaded stimuli
 guidata(hObject, gd);
 end
 
@@ -823,6 +809,59 @@ end
 end
 
 
+%% PARAMETERS CALLBACKS
+
+function toggleRandomITI(hObject, eventdata, gd)
+if hObject.Value
+    set(hObject,'String','Adding random ITI','BackgroundColor',[0,1,0]);
+    set([gd.Parameters.randomITIText,gd.Parameters.randomITImax],'Enable','on');
+else
+    set(hObject,'String','Add random ITI?','BackgroundColor',[.94,.94,.94]);
+    set([gd.Parameters.randomITIText,gd.Parameters.randomITImax],'Enable','off');
+end
+end
+
+function toggleCatchTrials(hObject, eventdata, gd)
+if hObject.Value
+    set(hObject,'String','Sending catch trials','BackgroundColor',[0,1,0]);
+    set([gd.Parameters.controlText,gd.Parameters.controlNum],'Enable','on');
+else
+    set(hObject,'String','Catch Trials?','BackgroundColor',[.94,.94,.94]);
+    set([gd.Parameters.controlText,gd.Parameters.controlNum],'Enable','off');
+end
+end
+
+function toggleRepeatBadTrials(hObject, eventdata, gd)
+if hObject.Value
+    set(hObject,'String','Repeating bad trials','BackgroundColor',[0,1,0]);
+    set([gd.Parameters.goodVelocityThresholdText,gd.Parameters.goodVelocityThreshold],'Enable','on');
+else
+    set(hObject,'String','Repeat bad trials?','BackgroundColor',[.94,.94,.94]);
+    set([gd.Parameters.goodVelocityThresholdText,gd.Parameters.goodVelocityThreshold],'Enable','off');
+end
+end
+
+function toggleWhiskerTracking(hObject, eventdata, gd)
+if hObject.Value
+    set(hObject,'String','Triggering Camera','BackgroundColor',[0,1,0]);
+    set([gd.Parameters.wtType,gd.Parameters.wtFrameRateText,gd.Parameters.wtFrameRate],'Enable','on');
+else
+    set(hObject,'String','Trigger Camera?','BackgroundColor',[.94,.94,.94]);
+    set([gd.Parameters.wtType,gd.Parameters.wtFrameRateText,gd.Parameters.wtFrameRate],'Enable','off');
+end
+end
+
+function ChangeWTFrameRate(hObject,eventdata,gd)
+newValue = str2num(hObject.String);
+if newValue <= 0
+    newValue = .0000001;
+    hObject.String = num2str(newValue);
+end
+gd.Experiment.params.frameRateWT = newValue;
+guidata(hObject, gd);
+end
+
+
 %% RUN EXPERIMENT
 function RunExperiment(hObject, eventdata, gd)
 
@@ -854,6 +893,48 @@ if hObject.Value
             Experiment.saving.save = false;
         end
         
+        %% Set parameters
+        
+        Experiment.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
+
+        Experiment.params.angleMove = str2double(gd.Controls.stepAngle.String);
+
+        Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
+        
+        Experiment.timing.ITI = str2double(gd.Parameters.ITI.String);
+        
+        Experiment.params.randomITI = gd.Parameters.randomITI.Value;
+        if Experiment.params.randomITI
+            Experiment.timing.randomITImax = str2double(gd.Parameters.randomITImax.String);
+        else
+            Experiment.timing.randomITImax = false;
+        end
+        
+        Experiment.params.catchTrials = gd.Parameters.control;
+        if Experiment.params.catchTrials
+            Experiment.params.numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
+        else
+            Experiment.params.numCatchesPerBlock = false;
+        end
+        
+        Experiment.params.repeatBadTrials = gd.Parameters.repeatBadTrials.Value;
+        if Experiment.params.repeatBadTrials
+            Experiment.params.speedThreshold = str2double(gd.Parameters.speedThreshold.String);
+        else
+            Experiment.params.speedThreshold = false;
+        end
+        
+        Experiment.params.whiskerTracking = gd.Parameters.whiskerTracking.Value;
+        if Experiment.params.whiskerTracking
+            Experiment.params.frameRateWT = str2double(gd.Parameters.wtFrameRate.String);
+        else
+            Experiment.params.frameRateWT = false;
+        end
+        
+        Experiment.params.blockShuffle = gd.Parameters.shuffle.Value;
+        
+        Experiment.params.runSpeed = gd.Parameters.runSpeed.Value;
+        
         %% Initialize button
         hObject.BackgroundColor = [0,0,0];
         hObject.ForegroundColor = [1,1,1];
@@ -868,23 +949,29 @@ if hObject.Value
         Experiment.params.samplingFrequency = DAQ.Rate; % the actual sampling frequency is rarely perfect from what is input
         
         % Add ports
+        
         % Imaging Computer Trigger (for timing)
         [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
         DAQ.Channels(id).Name = 'O_2PTrigger';
         [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
         DAQ.Channels(id).Name = 'I_FrameCounter';
+        
         % Motor Rotation
         [~,id] = DAQ.addAnalogOutputChannel('Dev1',0:1,'Voltage');
         % [~,id] = DAQ.addDigitalChannel('Dev1','port0/line4:5','OutputOnly');
         DAQ.Channels(id(1)).Name = 'O_MotorStep';
         DAQ.Channels(id(2)).Name = 'O_MotorDir';
+        
         % Running Wheel
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
-        DAQ.Channels(id(1)).Name = 'I_RunWheelA';
-        DAQ.Channels(id(2)).Name = 'I_RunWheelB';
-        DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
+        if Experiment.params.runSpeed
+            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
+            DAQ.Channels(id(1)).Name = 'I_RunWheelA';
+            DAQ.Channels(id(2)).Name = 'I_RunWheelB';
+            DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
+        end
+        
         % Whisker tracking
-        if gd.Controls.wtToggle.Value
+        if Experiment.params.whiskerTracking
             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line17','OutputOnly');
             DAQ.Channels(id).Name = 'O_WhiskerTracker';
             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line2','OutputOnly');
@@ -892,6 +979,7 @@ if hObject.Value
             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line18','InputOnly');
             DAQ.Channels(id).Name = 'I_WhiskerTracker';
         end
+        
         % Cleanup
         DAQChannels = {DAQ.Channels(:).Name};
         OutChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'O_')));
@@ -913,13 +1001,6 @@ if hObject.Value
         % DAQ.NotifyWhenDataAvailableExceeds = round(DAQ.Rate/100);
 
         % Compute timing of each trial
-        Experiment.timing.ITI = str2num(gd.Run.ITI.String);
-        Experiment.timing.stimDuration = str2num(gd.Run.stimDur.String);
-        if gd.Controls.randomITIToggle.Value
-            Experiment.timing.randomITImax = str2num(gd.Controls.randomITImax.String);
-        else
-            Experiment.timing.randomITImax = false;
-        end
         Experiment.timing.trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
         Experiment.timing.numScansPerTrial = ceil(Experiment.params.samplingFrequency * Experiment.timing.trialDuration);
         
@@ -938,21 +1019,16 @@ if hObject.Value
         Experiment.StimID = 1:size(Experiment.Position,1);
         
         % Determine if presenting control stimulus
-        Experiment.stim.control = gd.Run.control.Value;
-        if Experiment.stim.control
-            Experiment.StimID = [0, Experiment.StimID];
+        if Experiment.params.catchTrials
+            Experiment.StimID = [zeros(1,Experiment.params.numCatchesPerBlock), Experiment.StimID];
             Experiment.Position = [nan(1,2); Experiment.Position];
         end
-        
-        % Grab UI variables
-        Experiment.stim.blockShuffle = gd.Run.shuffle.Value;
-        Experiment.stim.repeatBadTrials = gd.Run.repeatBadTrials.Value;
         
         
         %% Create triggers
         
         % Initialize triggers
-        Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.stim.control+1);
+        Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.params.catchTrials+1);
         stepTriggers = moveStepperMotor(Experiment.params.angleMove, Experiment.params.samplingFrequency, 1, 2, false, 2);
         numStepTriggers = size(stepTriggers, 1);
         
@@ -971,7 +1047,7 @@ if hObject.Value
         stopMove1 = startTrig-1;
         beginMove1 = stopMove1-numStepTriggers+1;
         Experiment.Triggers(beginMove1:stopMove1, strcmp(OutChannels,'O_MotorStep'), 1) = stepTriggers(:,1);
-        if Experiment.stim.control
+        if Experiment.params.catchTrials
             Experiment.Triggers(beginMove1:stopMove1, strcmp(OutChannels,'O_MotorStep'), 2) = stepTriggers(:,1);
             Experiment.Triggers(beginMove1:stopMove1-1, strcmp(OutChannels,'O_MotorDir'), 2) = 5;
         end
@@ -981,7 +1057,7 @@ if hObject.Value
         stopMove2 = Experiment.timing.numScansPerTrial;
         Experiment.Triggers(beginMove2:stopMove2, strcmp(OutChannels,'O_MotorStep'), 1) = stepTriggers(:,1);
         Experiment.Triggers(beginMove2:stopMove2-1, strcmp(OutChannels,'O_MotorDir'), 1) = 5;
-        if Experiment.stim.control
+        if Experiment.params.catchTrials
             Experiment.Triggers(beginMove2:stopMove2, strcmp(OutChannels,'O_MotorStep'), 2) = stepTriggers(:,1);
         end
         
@@ -990,16 +1066,16 @@ if hObject.Value
         % Experiment.Triggers(startTrig:endTrig-1, strcmp(OutChannels,'O_2PTrigger'), :) = 1; % high during whole stimulus
         
         % Trigger whisker tracking camera on every single trial
-        if gd.Controls.wtToggle.Value
+        if Experiment.params.whiskerTracking
             if Experiment.timing.ITI >= 0.01
-                if ~gd.Controls.wtType.Value    % single trigger per frame
+                if ~gd.Parameters.wtType.Value    % single trigger per frame
                     Experiment.Triggers(startTrig:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
                 else                            % single trigger per trial
                     Experiment.Triggers(startTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
                 end
                 Experiment.Triggers(startTrig-ceil(DAQ.Rate/100):endTrig, strcmp(OutChannels,'O_WhiskerIllumination')) = 1; % start LED a little before the start of imaging
             else % ITI is too short for LED to turn on and off
-                if ~gd.Controls.wtType.Value    % single trigger per frame
+                if ~gd.Parameters.wtType.Value    % single trigger per frame
                     Experiment.Triggers(1:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during entire time
                 else                            % single trigger per trial
                     Experiment.Triggers(startTrig) = 1; % image during stimulus period
@@ -1025,7 +1101,6 @@ if hObject.Value
         
         
         %% Initialize imaging session (scanbox only)
-        Experiment.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
         if strcmp(Experiment.ImagingType, 'sbx')
             H_Scanbox = udp(gd.Internal.ImagingComp.ip, 'RemotePort', gd.Internal.ImagingComp.port); % create udp port handle
             fopen(H_Scanbox);
@@ -1051,9 +1126,9 @@ if hObject.Value
         numStimuliCurrentBlock = numStimuli;
         Triggers = Experiment.Triggers;
         Positions = Experiment.Position;
-        ControlTrial = Experiment.stim.control;
-        BlockShuffle = Experiment.stim.blockShuffle;
         currentBlockOrder = Experiment.StimID;
+        ControlTrial = Experiment.params.catchTrials;
+        BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
         saveOut = Experiment.saving.save;
@@ -1084,9 +1159,9 @@ if hObject.Value
         BufferStim = zeros(numBufferScans, 1);
         
         % Variables for determing if mouse was running
-        RepeatBadTrials = Experiment.stim.repeatBadTrials;
+        RepeatBadTrials = Experiment.params.repeatBadTrials;
         StimuliToRepeat = [];
-        SpeedThreshold = Experiment.stim.speedThreshold;
+        SpeedThreshold = Experiment.params.speedThreshold;
         RunIndex = 1;
         
         %% Start Experiment
@@ -1191,7 +1266,7 @@ end
         currentStim = downsample(BufferStim(1:numBufferScans), dsamp);
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
             % max(BufferStim(numBufferScans-numScansReturned+1:numBufferScans)) > RunIndex || diff(BufferStim([numBufferScans-numScansReturned,numBufferScans])) == -RunIndex     % next stimulus is already running
-            TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex));  % calculate average running speed during stimulus
+            TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate average running speed during stimulus
             fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex));
             
             % Determine if mouse was running during previous trial
