@@ -26,7 +26,7 @@ gd.Experiment.saving.dataPrecision = 'uint16';
 
 gd.Experiment.timing.stimDuration = 1.5;    % in seconds
 gd.Experiment.timing.ITI = 4.5;             % in seconds
-gd.Experiment.timing.randomITImax = 0;      % in seconds
+gd.Experiment.timing.randomITImax = 2;      % in seconds
 
 gd.Experiment.params.samplingFrequency = 30000;
 gd.Experiment.params.angleMove = 30;            % positive scalar:  default angle for stepper motor to move each trial
@@ -39,7 +39,12 @@ gd.Experiment.params.speedThreshold = 100;      % positive scalar:  velocity thr
 gd.Experiment.params.whiskerTracking = false;   % true or false:    send triggers for whisker tracking camera?
 gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
 gd.Experiment.params.blockShuffle = true;       % true or false:    shuffle block order each block?
-gd.Experiment.params.runSpeed = true;           % ture or false;    record rotary encoder's velocity?
+% gd.Experiment.params.runSpeed = true;           % ture or false;    record rotary encoder's velocity? % temporarily commented out
+gd.Experiment.params.holdStart = true; %3       % true or positive scalar:    start experiment after first frame trigger or wait N seconds
+
+% Text user details
+gd.Internal.textUser.number = '7146241885';
+gd.Internal.textUser.carrier = 'att';
 
 % Properties for display or processing input data
 gd.Internal.buffer.numTrials = 2;           %4*gd.Experiment.params.samplingFrequency * (gd.Experiment.timing.stimDuration+gd.Experiment.timing.ITI);
@@ -499,7 +504,7 @@ gd.Parameters.shuffle = uicontrol(...
     'String',               'Shuffle blocks?',...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
-    'Position',             [0,.3,w1,.1],...
+    'Position',             [0,.3,.5,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Shuffle blocks?','Shuffling blocks'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 % record run speed
@@ -507,9 +512,19 @@ gd.Parameters.runSpeed = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Record velocity?',...
     'Parent',               gd.Parameters.panel,...
+    'Enable',               'off',... % temporary
     'Units',                'normalized',...
-    'Position',             [w1,.3,1-w1,.1],...
+    'Position',             [.5,.3,.5,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Record velocity?','Recording velocity'},...
+    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+% start once receiving frame triggers
+gd.Parameters.holdStart = uicontrol(...
+    'Style',                'checkbox',...
+    'String',               'Wait for frame triggers?',...
+    'Parent',               gd.Parameters.panel,...
+    'Units',                'normalized',...
+    'Position',             [0,.2,.5,.1],...
+    'UserData',             {[.94,.94,.94;0,1,0],'Wait for frame triggers?','Waiting for frame trigs'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 
 % EXPERIMENT
@@ -528,7 +543,7 @@ gd.Run.numTrials = uicontrol(...
     'Units',                'normalized',...
     'Position',             [.15,.9,.15,.1]);
 % send text message when complete
-gd.Run.numTrialsText = uicontrol(...
+gd.Run.textUser = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Send text?',...
     'Parent',               gd.Run.panel,...
@@ -592,8 +607,12 @@ if gd.Experiment.params.blockShuffle
     set(gd.Parameters.shuffle,'Value',true,'String','Shuffling blocks','BackgroundColor',[0,1,0]);
 end
 % Record velocity
-if gd.Experiment.params.runSpeed
+% if gd.Experiment.params.runSpeed % temporarily commented out
     set(gd.Parameters.runSpeed,'Value',true,'String','Recording velocity','BackgroundColor',[0,1,0]);
+% end % temporarily commented out
+% Hold start
+if isequal(gd.Experiment.params.holdStart,true)
+    set(gd.Parameters.holdStart,'Value',true,'String','Waiting for frame trigs','BackgroundColor',[0,1,0]);
 end
 
 CreateFilename(gd.Saving.FullFilename, [], gd);
@@ -935,6 +954,10 @@ if hObject.Value
         
         Experiment.params.runSpeed = gd.Parameters.runSpeed.Value;
         
+        if gd.Parameters.holdStart.Value
+            Experiment.params.holdStart = true;
+        end
+        
         %% Initialize button
         hObject.BackgroundColor = [0,0,0];
         hObject.ForegroundColor = [1,1,1];
@@ -1130,12 +1153,20 @@ if hObject.Value
         ControlTrial = Experiment.params.catchTrials;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
-        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
+        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', [], 'numStartScans', 0);
         saveOut = Experiment.saving.save;
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
         numScansPerTrial = Experiment.timing.numScansPerTrial;
         MaxRandomScans = floor(Experiment.timing.randomITImax*Experiment.params.samplingFrequency)+1;
+        
+        % Variable to delay start
+        if isequal(Experiment.params.holdStart,true)
+            Start = false;
+            FrameChannelIndex = find(strcmp(InChannels, 'I_FrameCounter'));
+        else
+            Start = true;
+        end
         
         % Variables if saving input data
         if saveOut
@@ -1168,7 +1199,11 @@ if hObject.Value
         % Start imaging
         if strcmp(Experiment.ImagingType, 'sbx')
             fprintf(H_Scanbox,'G'); %go
-            pause(5);
+        end
+        
+        % Delay start
+        if ~isequal(Experiment.params.holdStart,true)
+            pause(Experiment.params.holdStart);
         end
         
         % Start experiment
@@ -1193,6 +1228,11 @@ if hObject.Value
             fclose(H_DataFile);                      % close binary file
             gd.Saving.index.String = sprintf('%03d',str2double(gd.Saving.index.String) + 1); % update file index for next experiment
             CreateFilename(gd.Saving.FullFilename, [], gd); % update filename for next experiment
+        end
+        
+        % Text user
+        if gd.Run.textUser.Value
+            send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('StimPoleAzimuth finished at %s',Experiment.timing.finish));
         end
         
         % Close connections
@@ -1248,9 +1288,14 @@ end
             fwrite(H_DataFile, eventdata.Data', Precision);
         end
         
+        % Determine if received first frame trigger
+        if ~Start && any(eventdata.Data(:,FrameChannelIndex))
+            Start = true;
+        end
+        
         % Refresh buffer
         DataInBuffer = cat(1, DataInBuffer(numScansReturned+1:end,:), eventdata.Data(:,RunChannelIndices));   % concatenate new data and remove old data
-        BufferStim = BufferStim(numScansReturned+1:end); % remove corresponding data from stimulus buffer
+        BufferStim = BufferStim(numScansReturned+1:end); % remove corresponding old data from stimulus buffer
         
         % Convert entire buffer of pulses to run speed
         Data = [0;diff(DataInBuffer(:,1))>0];       % gather pulses' front edges
@@ -1312,7 +1357,12 @@ end
     function QueueData(src,eventdata)
         
         % Queue next trial
-        if  hObject.Value && (currentTrial < str2double(numTrialsObj.String) || ~isempty(StimuliToRepeat)) % user hasn't quit, and requested # of trials hasn't been reached or no trials need to be repeated
+        if ~Start % imaging system hasn't started yet, queue one "blank" trial
+            DAQ.queueOutputData(zeros(numScansPerTrial, numel(OutChannels)));
+            BufferStim = cat(1, BufferStim, zeros(numScansPerTrial, 1));
+            TrialInfo.numStartScans = TrialInfo.numStartScans + numScansPerTrial; % IS THIS NECESSARY TO RECORD?
+            
+        elseif  hObject.Value && (currentTrial < str2double(numTrialsObj.String) || ~isempty(StimuliToRepeat)) % user hasn't quit, and requested # of trials hasn't been reached or no trials need to be repeated
             
             % Update index
             currentTrial = currentTrial + 1;
@@ -1329,7 +1379,7 @@ end
                 StimuliToRepeat(1) = [];                                            % remove trial from repeat queue
             end
             
-            % Move motors into position for first trial
+            % First queuedata: move motors into position
             if currentTrial == 1
                 if TrialInfo.StimID(currentTrial)==0        % first trial is a control trial
                     temp = randi([ControlTrial+1,numStimuli]);
@@ -1389,4 +1439,92 @@ end
         end
     end
 
+end
+
+
+%% Send Text
+function send_text_message(number,carrier,subject,message)
+% SEND_TEXT_MESSAGE send text message to cell phone or other mobile device.
+%    SEND_TEXT_MESSAGE(NUMBER,CARRIER,SUBJECT,MESSAGE) sends a text message
+%    to mobile devices in USA. NUMBER is your 10-digit cell phone number.
+%    CARRIER is your cell phone service provider, which can be one of the
+%    following: 'Alltel', 'AT&T', 'Boost', 'Cingular', 'Cingular2',
+%    'Nextel', 'Sprint', 'T-Mobile', 'Verizon', or 'Virgin'. SUBJECT is the
+%    subject of the message, and MESSAGE is the content of the message to
+%    send.
+% 
+%    Example:
+%      send_text_message('234-567-8910','Cingular', ...
+%         'Calculation Done','Don't forget to retrieve your result file')
+%      send_text_message('234-567-8910','Cingular', ...
+%         'This is a text message without subject')
+%
+%   See also SENDMAIL.
+%
+% You must modify the first two lines of the code (code inside the double 
+% lines) before using.
+
+% Ke Feng, Sept. 2007
+% Please send comments to: jnfengke@gmail.com
+% $Revision: 1.0.0.0 $  $Date: 2007/09/28 16:23:26 $
+
+% =========================================================================
+% YOU NEED TO TYPE IN YOUR OWN EMAIL AND PASSWORDS:
+mail = 'adesnik.colony@gmail.com';    %Your GMail email address
+% mail = 'matlabsendtextmessage@gmail.com';    %Your GMail email address
+password = 'matlabtext';          %Your GMail password
+% and disable security: https://www.google.com/settings/security/lesssecureapps
+% =========================================================================
+
+if nargin == 3
+    message = subject;
+    subject = '';
+end
+
+% Format the phone number to 10 digit without dashes
+number = strrep(number, '-', '');
+if length(number) == 11 && number(1) == '1';
+    number = number(2:11);
+end
+
+% Information found from
+% http://www.sms411.net/2006/07/how-to-send-email-to-phone.html
+switch strrep(strrep(lower(carrier),'-',''),'&','')
+    case 'alltel';    emailto = strcat(number,'@message.alltel.com');
+    case 'att';       emailto = strcat(number,'@txt.att.net');
+    case 'boost';     emailto = strcat(number,'@myboostmobile.com');
+    case 'cricket';   emailto = strcat(number,'@sms.mycricket.com');
+    case 'sprint';    emailto = strcat(number,'@messaging.sprintpcs.com');
+    case 'tmobile';   emailto = strcat(number,'@tmomail.net');
+    case 'verizon';   emailto = strcat(number,'@vtext.com');
+    case 'virgin';    emailto = strcat(number,'@vmobl.com');
+end
+
+%% Set up Gmail SMTP service.
+% Note: following code found from
+% http://www.mathworks.com/support/solutions/data/1-3PRRDV.html
+% If you have your own SMTP server, replace it with yours.
+
+% Then this code will set up the preferences properly:
+setpref('Internet','E_mail',mail);
+setpref('Internet','SMTP_Server','smtp.gmail.com');
+setpref('Internet','SMTP_Username',mail);
+setpref('Internet','SMTP_Password',password);
+
+% The following four lines are necessary only if you are using GMail as
+% your SMTP server. Delete these lines wif you are using your own SMTP
+% server.
+props = java.lang.System.getProperties;
+props.setProperty('mail.smtp.auth','true');
+props.setProperty('mail.smtp.socketFactory.class', 'javax.net.ssl.SSLSocketFactory');
+props.setProperty('mail.smtp.socketFactory.port','465');
+
+%% Send the email
+sendmail(emailto,subject,message)
+
+if strcmp(mail,'matlabsendtextmessage@gmail.com')
+    disp('Please provide your own gmail for security reasons.')
+    disp('You can do that by modifying the first two lines ''send_text_message.m''')
+    disp('after the bulky comments.')
+end
 end
