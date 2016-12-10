@@ -1254,20 +1254,24 @@ if hObject.Value
         Experiment.timing.finish = datestr(now);    % record time experiment ended
         
         %% End Experiment
+        
+        % Scanbox only: stop imaging
         if strcmp(Experiment.ImagingType, 'sbx')
             fprintf(H_Scanbox,'S'); % stop imaging
             fclose(H_Scanbox);      % close connection
         end
+        
+        % If saving: append stop time, close file, & increment file index
         if saveOut
             save(SaveFile, 'Experiment', '-append'); % update with "Experiment.timing.finish" info
             fclose(H_DataFile);                      % close binary file
-            gd.Saving.index.String = sprintf('%03d',str2double(gd.Saving.index.String) + 1); % update file index for next experiment
+            gd.Saving.index.String = sprintf('%03d',str2double(gd.Saving.index.String) + 1); % increment file index for next experiment
             CreateFilename(gd.Saving.FullFilename, [], gd); % update filename for next experiment
         end
         
         % Text user
         if gd.Run.textUser.Value
-            send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('StimPoleAzimuth finished at %s',Experiment.timing.finish));
+            send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('Experiment finished at %s',Experiment.timing.finish(end-7:end)));
         end
         
         % Close connections
@@ -1361,8 +1365,9 @@ end
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
             preppedTrial = false; % last stimulus ended -> prep next trial
             
-            TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate average running speed during stimulus
-            fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex));
+            % Calculate mean running speed
+            TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate mean running speed during stimulus
+            fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex)); % display running speed
             
             % Determine if mouse was running during previous trial
             if TrialInfo.RunSpeed(RunIndex) < SpeedThreshold
