@@ -1196,14 +1196,12 @@ if hObject.Value
         
         % If delaying start
         Delay = Experiment.params.delay;
+        DelayTimer = false;                                             % only necessary when Delay or HoldStart
+        FrameChannelIndex = find(strcmp(InChannels, 'I_FrameCounter')); % only necessary for HoldStart
         if Delay || Experiment.params.holdStart
-            Start = false;
+            Started = false;
         else
-            Start = true;
-        end
-        if Experiment.params.holdStart
-            FrameChannelIndex = find(strcmp(InChannels, 'I_FrameCounter'));
-            DelayTimer = false;
+            Started = true;
         end
         
         % If saving input data
@@ -1326,16 +1324,16 @@ end
         end
         
         % If experiment hasn't started, determine whether to start experiment
-        if ~Start                                       % experiment hasn't started
+        if ~Started                                       % experiment hasn't started
             if DelayTimer                                   % delay timer started previously 
                 if toc(DelayTimer)>=Delay                       % requested delay time has been reached
-                    Start = true;                               	% start experiment
+                    Started = true;                               	% start experiment
                 end
             elseif any(eventdata.Data(:,FrameChannelIndex)) % first frame trigger received
                 if Delay                                    % delay requested
                     DelayTimer = tic;                           % start delay timer
                 else                                        % no delay requested
-                    Start = true;                               % start experiment
+                    Started = true;                               % start experiment
                 end
             end
         end
@@ -1407,7 +1405,7 @@ end
     function QueueData(src,eventdata)
         
         % Queue next trial
-        if ~Start % imaging system hasn't started yet, queue one "blank" trial
+        if ~Started % imaging system hasn't started yet, queue one "blank" trial
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
             
