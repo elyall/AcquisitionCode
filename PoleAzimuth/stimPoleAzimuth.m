@@ -40,7 +40,8 @@ gd.Experiment.params.whiskerTracking = false;   % true or false:    send trigger
 gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
 gd.Experiment.params.blockShuffle = true;       % true or false:    shuffle block order each block?
 % gd.Experiment.params.runSpeed = true;           % ture or false;    record rotary encoder's velocity? % temporarily commented out
-gd.Experiment.params.holdStart = true; %3       % true or positive scalar:    start experiment after first frame trigger or wait N seconds
+gd.Experiment.params.holdStart = true;          % true or false:    wait to start experiment until after first frame trigger received?
+gd.Experiment.params.delay = 3;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
 
 % Text user details
 gd.Internal.textUser.number = '7146241885';
@@ -376,6 +377,15 @@ gd.Parameters.stimDur = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'Position',             [w1+w2,.9,w3,.1]);
+% image acq mode
+gd.Parameters.imagingMode = uicontrol(...
+    'Style',                'togglebutton',...
+    'String',               'Constant Imaging',...
+    'Parent',               gd.Parameters.panel,...
+    'Units',                'normalized',...
+    'Position',             [0,.8,w1,.1],...
+    'UserData',             {[.94,.94,.94;1,1,1],'Constant Imaging','Trial Imaging'},...
+    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 % length of inter-trial interval
 gd.Parameters.ITIText = uicontrol(...
     'Style',                'text',...
@@ -487,8 +497,8 @@ gd.Parameters.wtFrameRateText = uicontrol(...
     'String',               'Frame Rate (Hz)',...
     'Parent',               gd.Parameters.panel,...
     'Enable',               'off',...
-    'Units',                'normalized',...
     'HorizontalAlignment',  'right',...
+    'Units',                'normalized',...
     'Position',             [w1,.4,w2,.1]);
 gd.Parameters.wtFrameRate = uicontrol(...
     'Style',                'edit',...
@@ -498,13 +508,36 @@ gd.Parameters.wtFrameRate = uicontrol(...
     'Units',                'normalized',...
     'Position',             [w1+w2,.4,w3,.1],...
     'Callback',             @(hObject,eventdata)ChangeWTFrameRate(hObject,eventdata,guidata(hObject)));
+% start after frame trigger recieved toggle
+gd.Parameters.holdStart = uicontrol(...
+    'Style',                'checkbox',...
+    'String',               'Wait for frame triggers?',...
+    'Parent',               gd.Parameters.panel,...
+    'Units',                'normalized',...
+    'Position',             [0,.3,w1,.1],...
+    'UserData',             {[.94,.94,.94;0,1,0],'Wait for frame triggers?','Waiting for frame trigs'},...
+    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+% delay
+gd.Parameters.delayText = uicontrol(...
+    'Style',                'text',...
+    'String',               'Start delay (s)',...
+    'Parent',               gd.Parameters.panel,...
+    'Units',                'normalized',...
+    'Position',             [w1,.3,w2,.1]);
+gd.Parameters.delay = uicontrol(...
+    'Style',                'edit',...
+    'String',               gd.Experiment.params.delay,...
+    'Parent',               gd.Parameters.panel,...
+    'HorizontalAlignment',  'right',...
+    'Units',                'normalized',...
+    'Position',             [w1+w2,.3,w3,.1]);
 % block shuffle toggle
 gd.Parameters.shuffle = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Shuffle blocks?',...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
-    'Position',             [0,.3,.5,.1],...
+    'Position',             [0,.2,.5,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Shuffle blocks?','Shuffling blocks'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 % record run speed
@@ -514,17 +547,8 @@ gd.Parameters.runSpeed = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Enable',               'off',... % temporary
     'Units',                'normalized',...
-    'Position',             [.5,.3,.5,.1],...
+    'Position',             [.5,.2,.5,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Record velocity?','Recording velocity'},...
-    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
-% start once receiving frame triggers
-gd.Parameters.holdStart = uicontrol(...
-    'Style',                'checkbox',...
-    'String',               'Wait for frame triggers?',...
-    'Parent',               gd.Parameters.panel,...
-    'Units',                'normalized',...
-    'Position',             [0,.2,.5,.1],...
-    'UserData',             {[.94,.94,.94;0,1,0],'Wait for frame triggers?','Waiting for frame trigs'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 
 % EXPERIMENT
@@ -611,7 +635,7 @@ end
     set(gd.Parameters.runSpeed,'Value',true,'String','Recording velocity','BackgroundColor',[0,1,0]);
 % end % temporarily commented out
 % Hold start
-if isequal(gd.Experiment.params.holdStart,true)
+if gd.Experiment.params.holdStart
     set(gd.Parameters.holdStart,'Value',true,'String','Waiting for frame trigs','BackgroundColor',[0,1,0]);
 end
 
@@ -954,9 +978,8 @@ if hObject.Value
         
         Experiment.params.runSpeed = gd.Parameters.runSpeed.Value;
         
-        if gd.Parameters.holdStart.Value
-            Experiment.params.holdStart = true;
-        end
+        Experiment.params.holdStart = gd.Parameters.holdStart.Value;
+        Experiment.params.delay = str2double(Experiment.params.delay.String);
         
         %% Initialize button
         hObject.BackgroundColor = [0,0,0];
@@ -1039,19 +1062,20 @@ if hObject.Value
         end
         
         % Determine stimulus IDs
+        [Experiment.Position,~,Block] = unique(Experiment.Position,'rows');
         Experiment.StimID = 1:size(Experiment.Position,1);
         
         % Determine if presenting control stimulus
         if Experiment.params.catchTrials
-            Experiment.StimID = [zeros(1,Experiment.params.numCatchesPerBlock), Experiment.StimID];
+            Experiment.StimID = [0, Experiment.StimID];
+            Block = [zeros(Experiment.params.numCatchesPerBloc,1); Block];
             Experiment.Position = [nan(1,2); Experiment.Position];
         end
         
         
         %% Create triggers
         
-        % Initialize triggers
-        Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.params.catchTrials+1);
+        % Build stepper motor triggers
         stepTriggers = moveStepperMotor(Experiment.params.angleMove, Experiment.params.samplingFrequency, 1, 2, false, 2);
         numStepTriggers = size(stepTriggers, 1);
         
@@ -1060,45 +1084,48 @@ if hObject.Value
         if numITITriggers < 2*numStepTriggers
             error('Not enough time for bar to move in and out');
         end
-        startTrig = numITITriggers-numStepTriggers+1;                       % move during end of ITI but leave room for bar moving out
-        endTrig = Experiment.timing.numScansPerTrial-numStepTriggers+1;  % bar moving our occurs during ITI but is queued with previous trial
+        startTrig = numITITriggers-numStepTriggers+1;                    % move during end of ITI but leave room for bar moving out
+        endTrig = Experiment.timing.numScansPerTrial-numStepTriggers+1;  % bar moving out occurs during ITI but is queued with previous trial
         
         % Adjust Callback timing so next trial is queued right after previous trial starts
         DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
-        
-        % Move In Stepper Motor
-        stopMove1 = startTrig-1;
-        beginMove1 = stopMove1-numStepTriggers+1;
-        Experiment.Triggers(beginMove1:stopMove1, strcmp(OutChannels,'O_MotorStep'), 1) = stepTriggers(:,1);
-        if Experiment.params.catchTrials
-            Experiment.Triggers(beginMove1:stopMove1, strcmp(OutChannels,'O_MotorStep'), 2) = stepTriggers(:,1);
-            Experiment.Triggers(beginMove1:stopMove1-1, strcmp(OutChannels,'O_MotorDir'), 2) = 5;
-        end
-        
-        % Move Out Stepper Motor
-        beginMove2 = Experiment.timing.numScansPerTrial-numStepTriggers+1;
-        stopMove2 = Experiment.timing.numScansPerTrial;
-        Experiment.Triggers(beginMove2:stopMove2, strcmp(OutChannels,'O_MotorStep'), 1) = stepTriggers(:,1);
-        Experiment.Triggers(beginMove2:stopMove2-1, strcmp(OutChannels,'O_MotorDir'), 1) = 5;
-        if Experiment.params.catchTrials
-            Experiment.Triggers(beginMove2:stopMove2, strcmp(OutChannels,'O_MotorStep'), 2) = stepTriggers(:,1);
-        end
-        
+
+        % Initialize triggers
+        Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.params.catchTrials+1);
+
         % Trigger imaging computer on every single trial
         Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels,'O_2PTrigger'), :) = 1; % trigger at beginning and end of stimulus
         % Experiment.Triggers(startTrig:endTrig-1, strcmp(OutChannels,'O_2PTrigger'), :) = 1; % high during whole stimulus
         
+        % Move In Stepper Motor
+        stopMove = startTrig-1;
+        beginMove = stopMove-numStepTriggers+1;
+        Experiment.Triggers(beginMove:stopMove, strcmp(OutChannels,'O_MotorStep'), 1) = stepTriggers(:,1);
+        if Experiment.params.catchTrials
+            Experiment.Triggers(beginMove:stopMove, strcmp(OutChannels,'O_MotorStep'), 2) = stepTriggers(:,1);
+            Experiment.Triggers(beginMove:stopMove-1, strcmp(OutChannels,'O_MotorDir'), 2) = 5;
+        end
+        
+        % Move Out Stepper Motor
+        beginMove = Experiment.timing.numScansPerTrial-numStepTriggers+1;
+        stopMove = Experiment.timing.numScansPerTrial;
+        Experiment.Triggers(beginMove:stopMove, strcmp(OutChannels,'O_MotorStep'), 1) = stepTriggers(:,1);
+        Experiment.Triggers(beginMove:stopMove-1, strcmp(OutChannels,'O_MotorDir'), 1) = 5;
+        if Experiment.params.catchTrials
+            Experiment.Triggers(beginMove:stopMove, strcmp(OutChannels,'O_MotorStep'), 2) = stepTriggers(:,1);
+        end
+        
         % Trigger whisker tracking camera on every single trial
         if Experiment.params.whiskerTracking
             if Experiment.timing.ITI >= 0.01
-                if ~gd.Parameters.wtType.Value    % single trigger per frame
+                if ~gd.Parameters.wtType.Value	% single trigger per frame
                     Experiment.Triggers(startTrig:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
                 else                            % single trigger per trial
                     Experiment.Triggers(startTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
                 end
                 Experiment.Triggers(startTrig-ceil(DAQ.Rate/100):endTrig, strcmp(OutChannels,'O_WhiskerIllumination')) = 1; % start LED a little before the start of imaging
             else % ITI is too short for LED to turn on and off
-                if ~gd.Parameters.wtType.Value    % single trigger per frame
+                if ~gd.Parameters.wtType.Value	% single trigger per frame
                     Experiment.Triggers(1:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during entire time
                 else                            % single trigger per trial
                     Experiment.Triggers(startTrig) = 1; % image during stimulus period
@@ -1112,7 +1139,7 @@ if hObject.Value
         Experiment.Stimulus(startTrig:endTrig-1) = 1;
         
         
-        %% Initialize stimuli and linear motors
+        %% Initialize linear motors
         if Experiment.stim.activeAxes(1)
             H_LinearStage(1) = serial(gd.Internal.LinearStage.APport, 'BaudRate', 9600);
             fopen(H_LinearStage(1));
@@ -1146,36 +1173,47 @@ if hObject.Value
         numTrialsObj = gd.Run.numTrials;
         ActiveAxes = find(Experiment.stim.activeAxes);
         numStimuli = numel(Experiment.StimID);
-        numStimuliCurrentBlock = numStimuli;
         Triggers = Experiment.Triggers;
         Positions = Experiment.Position;
-        currentBlockOrder = Experiment.StimID;
+        currentBlockOrder = Block;
+        numBlock = numel(currentBlockOrder);
         ControlTrial = Experiment.params.catchTrials;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
-        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', [], 'numStartScans', 0);
+        currentNewTrial = 0;
+        preppedTrial = false;
+        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
         saveOut = Experiment.saving.save;
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
-        numScansPerTrial = Experiment.timing.numScansPerTrial;
-        MaxRandomScans = floor(Experiment.timing.randomITImax*Experiment.params.samplingFrequency)+1;
         
-        % Variable to delay start
-        if isequal(Experiment.params.holdStart,true)
+        % If adding random ITI
+        if Experiment.params.randomITI
+            MaxRandomScans = floor(Experiment.timing.randomITImax*Experiment.params.samplingFrequency);
+        else
+            MaxRandomScans = 0;
+        end
+        
+        % If delaying start
+        Delay = Experiment.params.delay;
+        if Delay || Experiment.params.holdStart
             Start = false;
-            FrameChannelIndex = find(strcmp(InChannels, 'I_FrameCounter'));
         else
             Start = true;
         end
+        if Experiment.params.holdStart
+            FrameChannelIndex = find(strcmp(InChannels, 'I_FrameCounter'));
+            DelayTimer = false;
+        end
         
-        % Variables if saving input data
+        % If saving input data
         if saveOut
             Precision = Experiment.saving.dataPrecision;
         end
         
         % Variables for calculating and displaying running speed
         RunChannelIndices = [find(strcmp(InChannels, 'I_RunWheelB')),find(strcmp(InChannels,'I_RunWheelA'))];
-        numBufferScans = gd.Internal.buffer.numTrials*numScansPerTrial;
+        numBufferScans = gd.Internal.buffer.numTrials*Experiment.timing.numScansPerTrial;
         DataInBuffer = zeros(numBufferScans, 2);
         dsamp = gd.Internal.buffer.downSample;
         dsamp_Fs = Experiment.params.samplingFrequency / dsamp;
@@ -1195,33 +1233,32 @@ if hObject.Value
         SpeedThreshold = Experiment.params.speedThreshold;
         RunIndex = 1;
         
+        
         %% Start Experiment
+        
         % Start imaging
         if strcmp(Experiment.ImagingType, 'sbx')
-            fprintf(H_Scanbox,'G'); %go
-        end
-        
-        % Delay start
-        if ~isequal(Experiment.params.holdStart,true)
-            pause(Experiment.params.holdStart);
+            fprintf(H_Scanbox,'G'); % start imaging
         end
         
         % Start experiment
-        Experiment.timing.start = datestr(now);
-        QueueData();
-        DAQ.startBackground;
-        
+        QueueData();                                % queue initial output triggers (blanks)
+        if ~Experiment.params.holdStart && Delay    % delay starts right away
+            DelayTimer = tic;                       % start delay timer
+        end
+        Experiment.timing.start = datestr(now);     % record time experiment started
+        DAQ.startBackground;                        % start experiment
         
         %% During Experiment
-        while DAQ.IsRunning
-            pause(1);
+        while DAQ.IsRunning                         % experiment hasn't ended yet
+            pause(1);                               % free up command line
         end
-        Experiment.timing.finish = datestr(now);
+        Experiment.timing.finish = datestr(now);    % record time experiment ended
         
         %% End Experiment
         if strcmp(Experiment.ImagingType, 'sbx')
-            fprintf(H_Scanbox,'S'); %stop
-            fclose(H_Scanbox);
+            fprintf(H_Scanbox,'S'); % stop imaging
+            fclose(H_Scanbox);      % close connection
         end
         if saveOut
             save(SaveFile, 'Experiment', '-append'); % update with "Experiment.timing.finish" info
@@ -1288,9 +1325,19 @@ end
             fwrite(H_DataFile, eventdata.Data', Precision);
         end
         
-        % Determine if received first frame trigger
-        if ~Start && any(eventdata.Data(:,FrameChannelIndex))
-            Start = true;
+        % If experiment hasn't started, determine whether to start experiment
+        if ~Start                                       % experiment hasn't started
+            if DelayTimer                                   % delay timer started previously 
+                if toc(DelayTimer)>=Delay                       % requested delay time has been reached
+                    Start = true;                               	% start experiment
+                end
+            elseif any(eventdata.Data(:,FrameChannelIndex)) % first frame trigger received
+                if Delay                                    % delay requested
+                    DelayTimer = tic;                           % start delay timer
+                else                                        % no delay requested
+                    Start = true;                               % start experiment
+                end
+            end
         end
         
         % Refresh buffer
@@ -1307,10 +1354,15 @@ end
         dx_dt([1:sw_len,end-sw_len+1:end]) = [];    % remove values produced by padding the data
         % dx_dt = dx_dt * 360/360;                  % convert to degrees (360 pulses per 360 degrees)
         
-        % Record average running speed during stimulus period
+        % Display new data and stimulus info
         currentStim = downsample(BufferStim(1:numBufferScans), dsamp);
+        plot(hAxes, numBufferScans:-dsamp:1, dx_dt, 'b-', numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');
+        ylim([-100,600]);
+        
+        % Record average running speed during stimulus period
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
-            % max(BufferStim(numBufferScans-numScansReturned+1:numBufferScans)) > RunIndex || diff(BufferStim([numBufferScans-numScansReturned,numBufferScans])) == -RunIndex     % next stimulus is already running
+            preppedTrial = false; % last stimulus ended -> prep next trial
+            
             TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate average running speed during stimulus
             fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex));
             
@@ -1331,26 +1383,24 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
-            % Move motor(s) into position for next trial
-            if numel(TrialInfo.StimID)>=RunIndex        % next trial has already been queued (necessary to move motors)
-                if TrialInfo.StimID(RunIndex)==0        % next trial is a control trial
-                    temp = randi([ControlTrial+1,numStimuli]);
-                    for index=ActiveAxes
-                        moveLinearMotor(Positions(temp,index), H_LinearStage(index)); %move motor
-                    end
-                else                                    % next trial is not a control trial
-                    for index=ActiveAxes
-                        moveLinearMotor(Positions(TrialInfo.StimID(RunIndex)+ControlTrial,index), H_LinearStage(index)); %move motor
-                    end
+        end %analyze last trial
+        
+        % Move motor(s) into position for next trial
+        if currentTrial>=RunIndex && ~preppedTrial  % next trial has been queued -> move motors into position
+            preppedTrial = true;
+            
+            if TrialInfo.StimID(RunIndex)==0        % next trial is a control trial
+                temp = randi([ControlTrial+1,numStimuli]);
+                for index=ActiveAxes
+                    moveLinearMotor(Positions(temp,index), H_LinearStage(index)); %move motor
+                end
+            else                                    % next trial is not a control trial
+                for index=ActiveAxes
+                    moveLinearMotor(Positions(TrialInfo.StimID(RunIndex)+ControlTrial,index), H_LinearStage(index)); %move motor
                 end
             end
+        end %prep next trial
             
-        end
-        
-        % Display new data and stimulus info
-        plot(hAxes, numBufferScans:-dsamp:1, dx_dt, 'b-', numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');
-        ylim([-100,600]);
-        
     end %SaveDateIn
 
 %% Callback: QueueOutputData
@@ -1358,9 +1408,8 @@ end
         
         % Queue next trial
         if ~Start % imaging system hasn't started yet, queue one "blank" trial
-            DAQ.queueOutputData(zeros(numScansPerTrial, numel(OutChannels)));
-            BufferStim = cat(1, BufferStim, zeros(numScansPerTrial, 1));
-            TrialInfo.numStartScans = TrialInfo.numStartScans + numScansPerTrial; % IS THIS NECESSARY TO RECORD?
+            DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
+            BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
             
         elseif  hObject.Value && (currentTrial < str2double(numTrialsObj.String) || ~isempty(StimuliToRepeat)) % user hasn't quit, and requested # of trials hasn't been reached or no trials need to be repeated
             
@@ -1368,10 +1417,12 @@ end
             currentTrial = currentTrial + 1;
             ExperimentReachedEnd = false;
             
-            if currentTrial <= str2double(numTrialsObj.String) %haven't reached end of experiment
-                blockIndex = rem(currentTrial-1, numStimuliCurrentBlock)+1;
+            % Determine StimID of stimulus to queue
+            if currentTrial <= str2double(numTrialsObj.String) % haven't reached end of experiment
+                currentNewTrial = currentNewTrial + 1;
+                blockIndex = rem(currentNewTrial-1, numBlock)+1;
                 if BlockShuffle && blockIndex == 1                                  % if starting new block, shuffle the stimuli order
-                    currentBlockOrder = currentBlockOrder(randperm(numStimuli));    % shuffle block
+                    currentBlockOrder = currentBlockOrder(randperm(numBlock));      % shuffle block
                 end
                 TrialInfo.StimID(currentTrial) = currentBlockOrder(blockIndex);     % determine StimID for current trial
             else %trials need to be repeated
@@ -1379,7 +1430,7 @@ end
                 StimuliToRepeat(1) = [];                                            % remove trial from repeat queue
             end
             
-            % First queuedata: move motors into position
+            % First QueueData call: move motors into position for first trial
             if currentTrial == 1
                 if TrialInfo.StimID(currentTrial)==0        % first trial is a control trial
                     temp = randi([ControlTrial+1,numStimuli]);
@@ -1395,23 +1446,23 @@ end
             
             % Queue triggers
             if TrialInfo.StimID(currentTrial) ~= 0              % current trial is not control trial
-                if MaxRandomScans == 1                          % do not add random ITI
+                if ~MaxRandomScans                              % do not add random ITI
                     DAQ.queueOutputData(Triggers(:,:,1));       % queue normal stim triggers
                 else
-                    TrialInfo.numRandomScansPost(currentTrial) = randi(MaxRandomScans)-1; % determine amount of extra scans to add
+                    TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
                     DAQ.queueOutputData(cat(1,Triggers(:,:,1),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue normal stim triggers with extra scans
                 end
             else                                                % current trial is control trial
-                if MaxRandomScans == 1                          % do not add random ITI
+                if ~MaxRandomScans                              % do not add random ITI
                     DAQ.queueOutputData(Triggers(:,:,2));       % queue normal control triggers
                 else
-                    TrialInfo.numRandomScansPost(currentTrial) = randi(MaxRandomScans)-1; % determine amount of extra scans to add
+                    TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
                     DAQ.queueOutputData(cat(1,Triggers(:,:,2),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue normal control triggers with extra scans
                 end
             end
             
             % Update buffer
-            if MaxRandomScans == 1
+            if ~MaxRandomScans
                 BufferStim = cat(1, BufferStim, Stimulus*currentTrial);
             else
                 BufferStim = cat(1, BufferStim, Stimulus*currentTrial, zeros(TrialInfo.numRandomScansPost(currentTrial),1));
@@ -1425,17 +1476,17 @@ end
             
         elseif ~ExperimentReachedEnd
             % Queue blank trial to ensure last trial does not have to be
-            % repeated and to ensure no imaging frames get clipped
-            DAQ.queueOutputData(zeros(numScansPerTrial, numel(OutChannels)));
-            BufferStim = cat(1, BufferStim, zeros(numScansPerTrial, 1));
+            % repeated and to ensure no within trial frames get clipped
+            DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
+            BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
             ExperimentReachedEnd = true;
         
-        elseif currentTrial >= str2double(numTrialsObj.String)
-            fprintf('\nComplete: finished %d trials(s) (max trials reached)\n', currentTrial);
-            
-        elseif ~hObject.Value
-            fprintf('\nComplete: finished %d trial(s) (user quit)\n', currentTrial);
-            
+        else % experiment is complete -> don't queue more scans
+            if currentTrial >= str2double(numTrialsObj.String)
+                fprintf('\nComplete: finished %d trials(s) (max trials reached)\n', currentTrial);
+            elseif ~hObject.Value
+                fprintf('\nComplete: finished %d trial(s) (user quit)\n', currentTrial);     
+            end
         end
     end
 
