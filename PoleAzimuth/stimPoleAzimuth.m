@@ -939,7 +939,8 @@ if hObject.Value
         %% Set parameters
         
         Experiment.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
-
+        Experiment.ImagingMode = gd.Parameters.imagingMode.String{gd.Parameters.imagingMode.Value};
+        
         Experiment.params.angleMove = str2double(gd.Controls.stepAngle.String);
 
         Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
@@ -1171,6 +1172,9 @@ if hObject.Value
         
         % Necessary variables
         numTrialsObj = gd.Run.numTrials;
+        ImagingType = Experiment.ImagingType;
+        ImagingMode = Experiment.ImagingMode;
+        numScansBaseline = Experiment.params.samplingFrequency * numSecondsBaseline;
         ActiveAxes = find(Experiment.stim.activeAxes);
         numStimuli = numel(Experiment.StimID);
         Triggers = Experiment.Triggers;
@@ -1223,7 +1227,7 @@ if hObject.Value
         
         % Variables for displaying stim info
         numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
-        BufferStim = zeros(numBufferScans, 1);
+        BufferStim = zeros(numBufferScans, 1); % initialize with blank trial: QueueData will append another trial to it, and SaveDataIn will remove scans from it
         
         % Variables for determing if mouse was running
         RepeatBadTrials = Experiment.params.repeatBadTrials;
@@ -1236,7 +1240,9 @@ if hObject.Value
         
         % Start imaging
         if strcmp(Experiment.ImagingType, 'sbx')
-            fprintf(H_Scanbox,'G'); % start imaging
+            if ~strcmp(ImagingMode,'Trial Imaging')
+                fprintf(H_Scanbox,'G'); % start imaging
+            end
         end
         
         % Start experiment
@@ -1257,7 +1263,9 @@ if hObject.Value
         
         % Scanbox only: stop imaging
         if strcmp(Experiment.ImagingType, 'sbx')
-            fprintf(H_Scanbox,'S'); % stop imaging
+            if ~strcmp(ImagingMode,'Trial Imaging')
+                fprintf(H_Scanbox,'S'); % stop imaging
+            end
             fclose(H_Scanbox);      % close connection
         end
         
@@ -1365,6 +1373,11 @@ end
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
             preppedTrial = false; % last stimulus ended -> prep next trial
             
+            % Trial Imaging mode: stop recording data
+            if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
+                fprintf(H_Scanbox,'S'); % stop recording
+            end
+            
             % Calculate mean running speed
             TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate mean running speed during stimulus
             fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex)); % display running speed
@@ -1386,6 +1399,8 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
+        elseif strcmp(ImagingMode,'Trial Imaging') && any(diff(BufferStim(numBufferScans+1:numBufferScans+numScansBaseline)) == RunIndex) && strcmp(ImagingType,'sbx') % next stimulus starts within window
+            fprintf(H_Scanbox,'G'); % start recording
         end %analyze last trial
         
         % Move motor(s) into position for next trial

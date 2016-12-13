@@ -602,9 +602,6 @@ end
 end
 
 
-%% TIMING CALLBACKS
-
-
 %% STIMULI CALLBACKS
 % function LoadStimuli(hObject, eventdata, gd)
 % % Select and load file
@@ -883,6 +880,7 @@ if hObject.Value
         %% Set parameters
         
         Experiment.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
+        Experiment.ImagingMode = gd.Parameters.imagingMode.String{gd.Parameters.imagingMode.Value};
 
         Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
         
