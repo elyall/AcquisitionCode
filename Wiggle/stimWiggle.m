@@ -25,33 +25,33 @@ gd.Experiment.saving.SaveFile = fullfile(gd.Internal.save.path, gd.Internal.save
 gd.Experiment.saving.DataFile = '';
 gd.Experiment.saving.dataPrecision = 'uint16';
 
-gd.Experiment.timing.stimDur = 4;           %seconds
-gd.Experiment.timing.ITI = 25;              %seconds
+gd.Experiment.timing.stimDuration = .5;     %seconds
+gd.Experiment.timing.ITI = 5;               %seconds
 gd.Experiment.timing.randomITImax = 3;      %seconds
 
 gd.Experiment.stim.frequency = 10;          %hz
-gd.Experiment.stim.wailDuration = 0.0499;   %seconds
+gd.Experiment.stim.wailDuration = 0.02;     %seconds
 gd.Experiment.stim.voltage = 5;             %volts
-gd.Experiment.stim.bidirectional = true;    %boolean
+gd.Experiment.stim.bidirectional = false;   %boolean
 if numConditions == 1
-    gd.Internal.daq.piezos = table({true},{'Dev1'},{'ao0'},'VariableNames',{'Active','Device','Port'});
+    gd.Experiment.stim.piezos = table({true},{'Dev1'},{'0'},{''},'VariableNames',{'Active','Device','Port','Whisker'});
 elseif numConditions == 2
-    gd.Internal.daq.piezos = table({true;true},{'Dev1';'Dev1'},{'ao0';'ao1'},'VariableNames',{'Active','Device','Port'});
+    gd.Experiment.stim.piezos = table({true;true},{'Dev1';'Dev1'},{'0';'1'},{'';''},'VariableNames',{'Active','Device','Port','Whisker'});
 end
 
 gd.Experiment.params.samplingFrequency = 30000;
 gd.Experiment.params.numTrials = 5;             % positive integer: default # of trials to present
 gd.Experiment.params.randomITI = false;         % true or false:    add on random time to ITI?
-gd.Experiment.params.catchTrials = true;        % true or false:    give control stimulus?
+gd.Experiment.params.catchTrials = false;       % true or false:    give control stimulus?
 gd.Experiment.params.numCatchesPerBlock = 1;    % positive integer: default # of catch trials to present per block
 gd.Experiment.params.repeatBadTrials = false;   % true or false:    repeat non-running trials
 gd.Experiment.params.speedThreshold = 100;      % positive scalar:  velocity threshold for good running trials (deg/s)
 gd.Experiment.params.whiskerTracking = false;   % true or false:    send triggers for whisker tracking camera?
 gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
-gd.Experiment.params.blockShuffle = true;       % true or false:    shuffle block order each block?
-% gd.Experiment.params.runSpeed = true;           % ture or false;    record rotary encoder's velocity? % temporarily commented out
+gd.Experiment.params.blockShuffle = false;      % true or false:    shuffle block order each block?
+gd.Experiment.params.runSpeed = false;          % true or false;    record rotary encoder's velocity? % temporarily won't record running speed
 gd.Experiment.params.holdStart = true;          % true or false:    wait to start experiment until after first frame trigger received?
-gd.Experiment.params.delay = 3;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
+gd.Experiment.params.delay = 0;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
 
 % Text user details
 gd.Internal.textUser.number = '7146241885';
@@ -128,11 +128,11 @@ gd.gui.stim.piezos = uitable(...
     'Parent',               gd.gui.stim.panel,...
     'Units',                'normalized',...
     'Position',             [0,.6,1,.4],...
-    'ColumnName',           {'Active?','Device','Port'},...
-    'ColumnEditable',       [true, false, false],...
-    'ColumnFormat',         {'logical','char','char','char'},...
-    'ColumnWidth',          {50,50,75,50},...
-    'Data',                 table2cell(gd.Internal.daq.piezos));
+    'ColumnName',           {'Active?','Device','Port','Whisker'},...
+    'ColumnEditable',       [true, false, false, true],...
+    'ColumnFormat',         {'logical','char','char','char', 'char'},...
+    'ColumnWidth',          {50,50,75,75},...
+    'Data',                 table2cell(gd.Experiment.stim.piezos));
 % stimulus frequency
 gd.gui.stim.frequency = uicontrol(...
     'Style',                'edit',...
@@ -286,7 +286,7 @@ gd.Parameters.stimDurText = uicontrol(...
     'Position',             [w1,.9,w2,.1]);
 gd.Parameters.stimDur = uicontrol(...
     'Style',                'edit',...
-    'String',               gd.Experiment.timing.stimDur,...
+    'String',               gd.Experiment.timing.stimDuration,...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'Position',             [w1+w2,.9,w3,.1]);
@@ -451,18 +451,17 @@ gd.Parameters.shuffle = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'Position',             [0,.2,.5,.1],...
-    'UserData',             {[.94,.94,.94;0,1,0],'Shuffle blocks?','Shuffling blocks'},...
+    'UserData',             {[.94,.94,.94;0,1,0],'Shuffle within block?','Shuffling each block'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 % record run speed
 gd.Parameters.runSpeed = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Record velocity?',...
     'Parent',               gd.Parameters.panel,...
-    'Enable',               'off',... % temporary
     'Units',                'normalized',...
     'Position',             [.5,.2,.5,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Record velocity?','Recording velocity'},...
-    'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+    'Callback',             @(hObject,eventdata)ToggleCaptureRunSpeed(hObject,eventdata,guidata(hObject)));
 
 % EXPERIMENT
 % number of trials
@@ -541,12 +540,13 @@ if gd.Experiment.params.whiskerTracking
 end
 % Block shuffle
 if gd.Experiment.params.blockShuffle
-    set(gd.Parameters.shuffle,'Value',true,'String','Shuffling blocks','BackgroundColor',[0,1,0]);
+    set(gd.Parameters.shuffle,'Value',true,'String','Shuffling each block','BackgroundColor',[0,1,0]);
 end
 % Record velocity
-% if gd.Experiment.params.runSpeed % temporarily commented out
-    set(gd.Parameters.runSpeed,'Value',true,'String','Recording velocity','BackgroundColor',[0,1,0]);
-% end % temporarily commented out
+if gd.Experiment.params.runSpeed
+    gd.Parameters.runSpeed.Value = true;
+end
+ToggleCaptureRunSpeed(gd.Parameters.runSpeed,[],gd);
 % Hold start
 if gd.Experiment.params.holdStart
     set(gd.Parameters.holdStart,'Value',true,'String','Waiting for frame trigs','BackgroundColor',[0,1,0]);
@@ -670,7 +670,8 @@ end
 function ViewTriggers(hObject, eventdata, gd)
 if get(hObject,'Value')
     Fs = gd.Experiment.params.samplingFrequency;
-    Triggers = generateTriggers(gd);
+    Triggers = generatePiezoTrig(gd.Experiment.stim.wailDuration, gd.Experiment.stim.bidirectional, gd.Experiment.stim.frequency, ceil(str2double(gd.Parameters.stimDur.String)*gd.Experiment.params.samplingFrequency), gd.Experiment.params.samplingFrequency);
+    Triggers = Triggers*gd.Experiment.stim.voltage; % scale to proper voltage
     if isempty(gd.Internal.viewHandle) || ~ishghandle(gd.Internal.viewHandle) % figure doesn't exist
 %         pos = get(gd.gui.fig,'OuterPosition');
 %         pos2 = get(gd.gui.stim.panel,'Position');
@@ -705,7 +706,7 @@ end
 function TestTriggers(hObject, eventdata, gd)
 if get(hObject,'Value')
     DAQ = daq.createSession('ni');
-    DAQ.Rate = gd.Internal.daq.samplingFrequency;
+    DAQ.Rate = gd.Experiment.params.samplingFrequency;
     PD = get(gd.gui.stim.piezos,'Data');
     ActivePiezos = [PD{:,1}];
     if ~any(ActivePiezos)
@@ -713,11 +714,12 @@ if get(hObject,'Value')
         error('Requires at least one active piezo!');
     end
     for index = find(ActivePiezos)
-        [~,id] = DAQ.addAnalogOutputChannel(gd.Internal.daq.piezos.Device{index},gd.Internal.daq.piezos.Port{index},'Voltage');
+        [~,id] = DAQ.addAnalogOutputChannel(gd.Experiment.stim.piezos.Device{index},str2double(gd.Experiment.stim.piezos.Port{index}),'Voltage');
         DAQ.Channels(id).Name = sprintf('O_Piezo%d',index);
     end
     
-    Triggers = generateTriggers(gd);
+    Triggers = generatePiezoTrig(gd.Experiment.stim.wailDuration, gd.Experiment.stim.bidirectional, gd.Experiment.stim.frequency, ceil(str2double(gd.Parameters.stimDur.String)*gd.Experiment.params.samplingFrequency), gd.Experiment.params.samplingFrequency);
+    Triggers = Triggers*gd.Experiment.stim.voltage; % scale to proper voltage
     Triggers = repmat(Triggers(:,1),1,nnz(ActivePiezos));
     
     set(hObject,'String','Testing...'); drawnow;
@@ -733,25 +735,6 @@ if get(hObject,'Value')
 else
     set(hObject,'String','Stopping...'); drawnow;
 end
-end
-
-function Triggers = generateTriggers(gd)
-t = gd.Experiment.timing;
-s = gd.Experiment.stim;
-Fs = gd.Experiment.params.samplingFrequency;
-
-% Initialize Triggers
-trialDuration = t.stimDur + t.ITI;
-numScansPerTrial = round(trialDuration*Fs);
-Triggers = zeros(numScansPerTrial,1);
-
-% Build piezo triggers
-piezoTrigs = generatePiezoTrig(s.wailDuration, s.bidirectional, s.frequency, ceil(t.stimDur*Fs), Fs);
-piezoTrigs = piezoTrigs*s.voltage; % scale to proper voltage
-startTrig = round(t.ITI*Fs)+1;
-endTrig = startTrig+numel(piezoTrigs)-1;
-Triggers(startTrig:endTrig,1) = piezoTrigs;
-
 end
 
 function trig = generatePiezoTrig(duration, bidirectional, freq, numScans, Fs)
@@ -845,14 +828,27 @@ gd.Experiment.params.frameRateWT = newValue;
 guidata(hObject, gd);
 end
 
+function ToggleCaptureRunSpeed(hObject, eventdata, gd)
+if hObject.Value
+    set(hObject,'String','Recording velocity','BackgroundColor',[0,1,0]);
+    gd.Parameters.repeatBadTrials.Enable = 'on';
+else
+    set(hObject,'String','Record velocity?','BackgroundColor',[.94,.94,.94]);
+    set(gd.Parameters.repeatBadTrials,'Value',false,'Enable','off');
+end
+toggleRepeatBadTrials(gd.Parameters.repeatBadTrials,[],gd);
+end
+
 
 %% RUN EXPERIMENT
 function RunExperiment(hObject, eventdata, gd)
 
 if hObject.Value
     try
-        if ~isfield(gd.Experiment,'Position') || isempty(gd.Experiment.Position)
-            error('No stimulus loaded! Please load some stimuli.');
+        Experiment.stim.piezos = cell2table(gd.gui.stim.piezos.Data,'VariableNames',{'Active','Device','Port','Whisker'});
+        ActivePiezos = [Experiment.stim.piezos{:,1}];
+        if ~any(ActivePiezos)
+            error('Requires at least one active piezo!');
         end
         Experiment = gd.Experiment;
         
@@ -880,7 +876,7 @@ if hObject.Value
         %% Set parameters
         
         Experiment.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
-        Experiment.ImagingMode = gd.Parameters.imagingMode.String{gd.Parameters.imagingMode.Value};
+        Experiment.ImagingMode = gd.Parameters.imagingMode.String;
 
         Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
         
@@ -893,7 +889,7 @@ if hObject.Value
             Experiment.timing.randomITImax = false;
         end
         
-        Experiment.params.catchTrials = gd.Parameters.control;
+        Experiment.params.catchTrials = gd.Parameters.control.Value;
         if Experiment.params.catchTrials
             Experiment.params.numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
         else
@@ -919,7 +915,7 @@ if hObject.Value
         Experiment.params.runSpeed = gd.Parameters.runSpeed.Value;
         
         Experiment.params.holdStart = gd.Parameters.holdStart.Value;
-        Experiment.params.delay = str2double(Experiment.params.delay.String);
+        Experiment.params.delay = str2double(gd.Parameters.delay.String);
         
         %% Initialize button
         hObject.BackgroundColor = [0,0,0];
@@ -942,11 +938,11 @@ if hObject.Value
         [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
         DAQ.Channels(id).Name = 'I_FrameCounter';
         
-        % Motor Rotation
-        [~,id] = DAQ.addAnalogOutputChannel('Dev1',0:1,'Voltage');
-        % [~,id] = DAQ.addDigitalChannel('Dev1','port0/line4:5','OutputOnly');
-        DAQ.Channels(id(1)).Name = 'O_MotorStep';
-        DAQ.Channels(id(2)).Name = 'O_MotorDir';
+        % Piezo Control
+        for pindex = find(ActivePiezos)
+            [~,id] = DAQ.addAnalogOutputChannel(Experiment.stim.piezos.Device{pindex},str2double(Experiment.stim.piezos.Port{pindex}),'Voltage');
+            DAQ.Channels(id).Name = sprintf('O_Piezo%d',pindex);
+        end
         
         % Running Wheel
         if Experiment.params.runSpeed
@@ -971,7 +967,7 @@ if hObject.Value
         OutChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'O_')));
         InChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'I_')));
         
-%         % Add clock
+%         % Add clock (only necessary when no analog channels)
 %         daqClock = daq.createSession('ni');
 %         daqClock.addCounterOutputChannel('Dev1',0,'PulseGeneration');
 %         clkTerminal = daqClock.Channels(1).Terminal;
@@ -992,69 +988,38 @@ if hObject.Value
         
         
         %% Determine stimuli
-        
-        % Determine axes
-        Experiment.stim.activeAxes = false(1,2);
-        for aindex = 1:2
-            if ~any(isnan(Experiment.Position(:,aindex)))
-                Experiment.stim.activeAxes(aindex) = true;
-            end
-        end
-        
+
         % Determine stimulus IDs
-        [Experiment.Position,~,Block] = unique(Experiment.Position,'rows');
-        Experiment.StimID = 1:size(Experiment.Position,1);
+        Experiment.StimID = 1:nnz(ActivePiezos);
+        Block = Experiment.StimID;
         
         % Determine if presenting control stimulus
         if Experiment.params.catchTrials
             Experiment.StimID = [0, Experiment.StimID];
-            Block = [zeros(Experiment.params.numCatchesPerBloc,1); Block];
-            Experiment.Position = [nan(1,2); Experiment.Position];
+            Block = [zeros(Experiment.params.numCatchesPerBlock,1); Block];
         end
         
         
-        %% Create triggers
-        
-        % Build stepper motor triggers
-        stepTriggers = moveStepperMotor(Experiment.params.angleMove, Experiment.params.samplingFrequency, 1, 2, false, 2);
-        numStepTriggers = size(stepTriggers, 1);
-        
-        % Determine timing
-        numITITriggers = floor(Experiment.params.samplingFrequency * Experiment.timing.ITI);    
-        if numITITriggers < 2*numStepTriggers
-            error('Not enough time for bar to move in and out');
-        end
-        startTrig = numITITriggers-numStepTriggers+1;                    % move during end of ITI but leave room for bar moving out
-        endTrig = Experiment.timing.numScansPerTrial-numStepTriggers+1;  % bar moving out occurs during ITI but is queued with previous trial
+        %% Create triggers 
+
+        % Build piezo triggers
+        Experiment.piezoTrigs = zeros(Experiment.timing.numScansPerTrial,1);
+        piezoTrigs = generatePiezoTrig(Experiment.stim.wailDuration, Experiment.stim.bidirectional, Experiment.stim.frequency, ceil(Experiment.timing.stimDuration*Experiment.params.samplingFrequency), Experiment.params.samplingFrequency);
+        piezoTrigs = piezoTrigs*Experiment.stim.voltage; % scale to proper voltage
+        startTrig = round(Experiment.timing.ITI*Experiment.params.samplingFrequency)+1;
+        endTrig = startTrig+numel(piezoTrigs)-1;
+        Experiment.piezoTrigs(startTrig:endTrig) = piezoTrigs;
         
         % Adjust Callback timing so next trial is queued right after previous trial starts
         DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
 
         % Initialize triggers
         Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.params.catchTrials+1);
-
+        
         % Trigger imaging computer on every single trial
         Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels,'O_2PTrigger'), :) = 1; % trigger at beginning and end of stimulus
         % Experiment.Triggers(startTrig:endTrig-1, strcmp(OutChannels,'O_2PTrigger'), :) = 1; % high during whole stimulus
-        
-        % Move In Stepper Motor
-        stopMove = startTrig-1;
-        beginMove = stopMove-numStepTriggers+1;
-        Experiment.Triggers(beginMove:stopMove, strcmp(OutChannels,'O_MotorStep'), 1) = stepTriggers(:,1);
-        if Experiment.params.catchTrials
-            Experiment.Triggers(beginMove:stopMove, strcmp(OutChannels,'O_MotorStep'), 2) = stepTriggers(:,1);
-            Experiment.Triggers(beginMove:stopMove-1, strcmp(OutChannels,'O_MotorDir'), 2) = 5;
-        end
-        
-        % Move Out Stepper Motor
-        beginMove = Experiment.timing.numScansPerTrial-numStepTriggers+1;
-        stopMove = Experiment.timing.numScansPerTrial;
-        Experiment.Triggers(beginMove:stopMove, strcmp(OutChannels,'O_MotorStep'), 1) = stepTriggers(:,1);
-        Experiment.Triggers(beginMove:stopMove-1, strcmp(OutChannels,'O_MotorDir'), 1) = 5;
-        if Experiment.params.catchTrials
-            Experiment.Triggers(beginMove:stopMove, strcmp(OutChannels,'O_MotorStep'), 2) = stepTriggers(:,1);
-        end
-        
+    
         % Trigger whisker tracking camera on every single trial
         if Experiment.params.whiskerTracking
             if Experiment.timing.ITI >= 0.01
@@ -1079,17 +1044,6 @@ if hObject.Value
         Experiment.Stimulus(startTrig:endTrig-1) = 1;
         
         
-        %% Initialize linear motors
-        if Experiment.stim.activeAxes(1)
-            H_LinearStage(1) = serial(gd.Internal.LinearStage.APport, 'BaudRate', 9600);
-            fopen(H_LinearStage(1));
-        end
-        if Experiment.stim.activeAxes(2)
-            H_LinearStage(2) = serial(gd.Internal.LinearStage.MLport, 'BaudRate', 9600);
-            fopen(H_LinearStage(2));
-        end
-        
-        
         %% Initialize imaging session (scanbox only)
         if strcmp(Experiment.ImagingType, 'sbx')
             H_Scanbox = udp(gd.Internal.ImagingComp.ip, 'RemotePort', gd.Internal.ImagingComp.port); % create udp port handle
@@ -1111,21 +1065,26 @@ if hObject.Value
         
         % Necessary variables
         numTrialsObj = gd.Run.numTrials;
-        ActiveAxes = find(Experiment.stim.activeAxes);
-        numStimuli = numel(Experiment.StimID);
         Triggers = Experiment.Triggers;
-        Positions = Experiment.Position;
+        PiezoTrigs = Experiment.piezoTrigs;
+        PiezoChannelIDs = find(~cellfun(@isempty,strfind(OutChannels,'Piezo')));
         currentBlockOrder = Block;
         numBlock = numel(currentBlockOrder);
-        ControlTrial = Experiment.params.catchTrials;
+%         ControlTrial = Experiment.params.catchTrials;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
         currentNewTrial = 0;
-        preppedTrial = false;
-        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
+        TrialInfo = struct('StimID', []);
         saveOut = Experiment.saving.save;
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
+
+        % Variables for displaying stim info
+        numBufferScans = gd.Internal.buffer.numTrials*Experiment.timing.numScansPerTrial;
+        dsamp = gd.Internal.buffer.downSample;
+        numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
+        BufferStim = zeros(numBufferScans, 1);
+        hAxes = gd.Run.runSpeedAxes;
         
         % If adding random ITI
         if Experiment.params.randomITI
@@ -1149,28 +1108,26 @@ if hObject.Value
             Precision = Experiment.saving.dataPrecision;
         end
         
-        % Variables for calculating and displaying running speed
-        RunChannelIndices = [find(strcmp(InChannels, 'I_RunWheelB')),find(strcmp(InChannels,'I_RunWheelA'))];
-        numBufferScans = gd.Internal.buffer.numTrials*Experiment.timing.numScansPerTrial;
-        DataInBuffer = zeros(numBufferScans, 2);
-        dsamp = gd.Internal.buffer.downSample;
-        dsamp_Fs = Experiment.params.samplingFrequency / dsamp;
-        smooth_win = gausswin(dsamp_Fs, 23.5/2);
-        smooth_win = smooth_win/sum(smooth_win);
-        sw_len = length(smooth_win);
-        d_smooth_win = [0;diff(smooth_win)]/(1/dsamp_Fs);
-        hAxes = gd.Run.runSpeedAxes;
-        
-        % Variables for displaying stim info
-        numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
-        BufferStim = zeros(numBufferScans, 1);
-        
-        % Variables for determing if mouse was running
-        RepeatBadTrials = Experiment.params.repeatBadTrials;
-        StimuliToRepeat = [];
-        SpeedThreshold = Experiment.params.speedThreshold;
-        RunIndex = 1;
-        
+        % If capturing run speed
+        CaptureRunSpeed = Experiment.params.runSpeed;
+        if CaptureRunSpeed
+            % Variables for calculating and displaying running speed
+            RunChannelIndices = [find(strcmp(InChannels, 'I_RunWheelB')),find(strcmp(InChannels,'I_RunWheelA'))];
+            DataInBuffer = zeros(numBufferScans, 2);
+            dsamp_Fs = Experiment.params.samplingFrequency / dsamp;
+            smooth_win = gausswin(dsamp_Fs, 23.5/2);
+            smooth_win = smooth_win/sum(smooth_win);
+            sw_len = length(smooth_win);
+            d_smooth_win = [0;diff(smooth_win)]/(1/dsamp_Fs);
+            TrialInfo.Running = [];
+            TrialInfo.RunSpeed = [];
+            % Variables for determing if mouse was running
+            RepeatBadTrials = Experiment.params.repeatBadTrials;
+            StimuliToRepeat = [];
+            SpeedThreshold = Experiment.params.speedThreshold;
+            RunIndex = 1;
+        end
+
         
         %% Start Experiment
         
@@ -1212,12 +1169,7 @@ if hObject.Value
         % Text user
         if gd.Run.textUser.Value
             send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('Experiment finished at %s',Experiment.timing.finish(end-7:end)));
-        end
-        
-        % Close connections
-        for findex = 1:size(H_LinearStage,2)
-            fclose(H_LinearStage(findex));
-        end
+        end   
         
         % Reset button properties
         hObject.Value = false;
@@ -1282,67 +1234,53 @@ end
             end
         end
         
-        % Refresh buffer
-        DataInBuffer = cat(1, DataInBuffer(numScansReturned+1:end,:), eventdata.Data(:,RunChannelIndices));   % concatenate new data and remove old data
-        BufferStim = BufferStim(numScansReturned+1:end); % remove corresponding old data from stimulus buffer
+        % Update stimulus buffer and plot current state
+        BufferStim = BufferStim(numScansReturned+1:end);                    % remove corresponding old data from stimulus buffer
+        currentStim = downsample(BufferStim(1:numBufferScans), dsamp);      % downsample for plotting
+        plot(hAxes, numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');    % display stimulus state
+
+        % Calculate run speed of whole buffer
+        if CaptureRunSpeed
+            DataInBuffer = cat(1, DataInBuffer(numScansReturned+1:end,:), eventdata.Data(:,RunChannelIndices));   % concatenate new data and remove old data
+            Data = [0;diff(DataInBuffer(:,1))>0];       % gather pulses' front edges
+            Data(all([Data,DataInBuffer(:,2)],2)) = -1; % set backwards steps to be backwards
+            Data = cumsum(Data);                        % convert pulses to counter data
+            x_t = downsample(Data, dsamp);              % downsample data to speed up computation
+            x_t = padarray(x_t, sw_len, 'replicate');   % pad for convolution
+            dx_dt = conv(x_t, d_smooth_win, 'same');    % perform convolution
+            dx_dt([1:sw_len,end-sw_len+1:end]) = [];    % remove values produced by padding the data
+            % dx_dt = dx_dt * 360/360;                  % convert to degrees (360 pulses per 360 degrees)
+            plot(hAxes, numBufferScans:-dsamp:1, dx_dt, 'b-', numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');
         
-        % Convert entire buffer of pulses to run speed
-        Data = [0;diff(DataInBuffer(:,1))>0];       % gather pulses' front edges
-        Data(all([Data,DataInBuffer(:,2)],2)) = -1; % set backwards steps to be backwards
-        Data = cumsum(Data);                        % convert pulses to counter data
-        x_t = downsample(Data, dsamp);              % downsample data to speed up computation
-        x_t = padarray(x_t, sw_len, 'replicate');   % pad for convolution
-        dx_dt = conv(x_t, d_smooth_win, 'same');    % perform convolution
-        dx_dt([1:sw_len,end-sw_len+1:end]) = [];    % remove values produced by padding the data
-        % dx_dt = dx_dt * 360/360;                  % convert to degrees (360 pulses per 360 degrees)
-        
-        % Display new data and stimulus info
-        currentStim = downsample(BufferStim(1:numBufferScans), dsamp);
-        plot(hAxes, numBufferScans:-dsamp:1, dx_dt, 'b-', numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');
-        ylim([-100,600]);
-        
-        % Record average running speed during stimulus period
-        if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
-            preppedTrial = false; % last stimulus ended -> prep next trial
-            
-            % Calculate mean running speed
-            TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate mean running speed during stimulus
-            fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex)); % display running speed
-            
-            % Determine if mouse was running during previous trial
-            if TrialInfo.RunSpeed(RunIndex) < SpeedThreshold
-                TrialInfo.Running(RunIndex) = false;                                        % record that trial was bad
-                if RepeatBadTrials                                                          % repeate trial
-                    fprintf(' (trial to be repeated)');
-                    StimuliToRepeat = [StimuliToRepeat, TrialInfo.StimID(RunIndex)];        % add trial to repeat queue
+            % Record average running speed during stimulus period
+            if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
+                preppedTrial = false; % last stimulus ended -> prep next trial
+                
+                % Calculate mean running speed
+                TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate mean running speed during stimulus
+                fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex)); % display running speed
+                
+                % Determine if mouse was running during previous trial
+                if TrialInfo.RunSpeed(RunIndex) < SpeedThreshold
+                    TrialInfo.Running(RunIndex) = false;                                        % record that trial was bad
+                    if RepeatBadTrials                                                          % repeate trial
+                        fprintf(' (trial to be repeated)');
+                        StimuliToRepeat = [StimuliToRepeat, TrialInfo.StimID(RunIndex)];        % add trial to repeat queue
+                    end
+                else % mouse was running
+                    TrialInfo.Running(RunIndex) = true;                                         % record that trial was good
                 end
-            else % mouse was running
-                TrialInfo.Running(RunIndex) = true;                                         % record that trial was good
-            end
-            RunIndex = RunIndex+1; % increment index
-            
-            % Save to file
-            if saveOut
-                save(SaveFile, 'TrialInfo', '-append');
-            end
-            
-        end %analyze last trial
+                RunIndex = RunIndex+1; % increment index
+                
+                % Save to file
+                if saveOut
+                    save(SaveFile, 'TrialInfo', '-append');
+                end
+                
+            end %analyze last trial
+        end
         
-        % Move motor(s) into position for next trial
-        if currentTrial>=RunIndex && ~preppedTrial  % next trial has been queued -> move motors into position
-            preppedTrial = true;
-            
-            if TrialInfo.StimID(RunIndex)==0        % next trial is a control trial
-                temp = randi([ControlTrial+1,numStimuli]);
-                for index=ActiveAxes
-                    moveLinearMotor(Positions(temp,index), H_LinearStage(index)); %move motor
-                end
-            else                                    % next trial is not a control trial
-                for index=ActiveAxes
-                    moveLinearMotor(Positions(TrialInfo.StimID(RunIndex)+ControlTrial,index), H_LinearStage(index)); %move motor
-                end
-            end
-        end %prep next trial
+        ylim(hAxes, [-100,600]);    
             
     end %SaveDateIn
 
@@ -1350,11 +1288,11 @@ end
     function QueueData(src,eventdata)
         
         % Queue next trial
-        if ~Started % imaging system hasn't started yet, queue one "blank" trial
-            DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
-            BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
+        if hObject.Value && ~Started % user hasn't quit, and imaging system hasn't started yet 
+            DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));   % queue "blank" period
+            BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));        % update buffer
             
-        elseif  hObject.Value && (currentTrial < str2double(numTrialsObj.String) || ~isempty(StimuliToRepeat)) % user hasn't quit, and requested # of trials hasn't been reached or no trials need to be repeated
+        elseif  hObject.Value && (currentTrial < str2double(numTrialsObj.String) || ~isempty(StimuliToRepeat)) % user hasn't quit, and requested # of trials hasn't been reached or trials need to be repeated
             
             % Update index
             currentTrial = currentTrial + 1;
@@ -1372,35 +1310,23 @@ end
                 TrialInfo.StimID(currentTrial) = StimuliToRepeat(1);                % present first trial in repeat queue
                 StimuliToRepeat(1) = [];                                            % remove trial from repeat queue
             end
-            
-            % First QueueData call: move motors into position for first trial
-            if currentTrial == 1
-                if TrialInfo.StimID(currentTrial)==0        % first trial is a control trial
-                    temp = randi([ControlTrial+1,numStimuli]);
-                    for index=ActiveAxes
-                        moveLinearMotor(Positions(temp,index), H_LinearStage(index)); %move motor
-                    end
-                else                                        % first trial is not a control trial
-                    for index=ActiveAxes
-                        moveLinearMotor(Positions(TrialInfo.StimID(1)+ControlTrial,index), H_LinearStage(index)); %move motor
-                    end
-                end
-            end
-            
+       
             % Queue triggers
             if TrialInfo.StimID(currentTrial) ~= 0              % current trial is not control trial
+                currentTrigs = Triggers;
+                currentTrigs(:,PiezoChannelIDs(TrialInfo.StimID(currentTrial))) = PiezoTrigs;
                 if ~MaxRandomScans                              % do not add random ITI
-                    DAQ.queueOutputData(Triggers(:,:,1));       % queue normal stim triggers
+                    DAQ.queueOutputData(currentTrigs);          % queue stim triggers
                 else
                     TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
-                    DAQ.queueOutputData(cat(1,Triggers(:,:,1),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue normal stim triggers with extra scans
+                    DAQ.queueOutputData(cat(1,currentTrigs,zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue normal stim triggers with extra scans
                 end
             else                                                % current trial is control trial
                 if ~MaxRandomScans                              % do not add random ITI
-                    DAQ.queueOutputData(Triggers(:,:,2));       % queue normal control triggers
+                    DAQ.queueOutputData(Triggers);              % queue control triggers
                 else
                     TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
-                    DAQ.queueOutputData(cat(1,Triggers(:,:,2),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue normal control triggers with extra scans
+                    DAQ.queueOutputData(cat(1,Triggers,zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue normal control triggers with extra scans
                 end
             end
             
@@ -1417,8 +1343,8 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
-        elseif ~ExperimentReachedEnd
-            % Queue blank trial to ensure last trial does not have to be
+        elseif Started && ~ExperimentReachedEnd % experiment occurred and queued its final trial
+            % Queue blank period to ensure last trial does not have to be
             % repeated and to ensure no within trial frames get clipped
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
