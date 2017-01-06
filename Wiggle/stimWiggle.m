@@ -1122,12 +1122,11 @@ if hObject.Value
             TrialInfo.Running = [];
             TrialInfo.RunSpeed = [];
             % Variables for determing if mouse was running
-            RepeatBadTrials = Experiment.params.repeatBadTrials;
-            StimuliToRepeat = [];
+            RepeatBadTrials = Experiment.params.repeatBadTrials; 
             SpeedThreshold = Experiment.params.speedThreshold;
             RunIndex = 1;
         end
-
+        StimuliToRepeat = [];
         
         %% Start Experiment
         
