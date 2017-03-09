@@ -9,11 +9,11 @@ gd.Internal.save.filename = fullfile(gd.Internal.save.path, strcat(gd.Internal.s
 % Initialize Imaging
 gd.Internal.imaging.port = 'COM5';
 inputs = {...
+    'Brightness','',1.5625;...
     'FrameRate','Manual',200;...
-    'Brightness','Manual',1.5625;...
-    'Exposure','Manual',0.8287;...
     'Gain','Manual',2.823;...
     'Shutter','Manual',0.984};
+%     'Exposure','Manual',0.8287;... % exposure doesn't do anything for the flea3
 
 % Display parameters
 Display.units = 'pixels';
@@ -197,6 +197,7 @@ gd.gui.axes.FrameRate = uicontrol(...
 gd.Internal.settings.modes = {'Off','Manual','Auto'};
 % inputs
 gd.Internal.settings.num = size(inputs,1);
+gd.Internal.settings.handles = [];
 h = 1/gd.Internal.settings.num;
 for index = 1:gd.Internal.settings.num
     b = (gd.Internal.settings.num-index)*h;
@@ -214,19 +215,25 @@ for index = 1:gd.Internal.settings.num
         'Position',             [.15,b,.75,h],...
         'UserData',             inputs{index,1},...
         'Min',                  0,...
-        'Max',                  1,...
-        'Value',                .5,...
+        'Max',                  2,...
+        'Value',                1,...
         'Callback',             @(hObject,eventdata)ChangeSetting(hObject, eventdata, guidata(hObject)));
+    gd.Internal.settings.handles = [gd.Internal.settings.handles,gd.gui.sliders.(inputs{index,1})];
     val = find(strcmp(gd.Internal.settings.modes,inputs{index,2}));
-    gd.gui.sliders.state.(inputs{index,1}) = uicontrol(...
-        'Style',                'popupmenu',...
-        'String',               gd.Internal.settings.modes,...
-        'Parent',               gd.gui.sliders.panel,...
-        'Units',                'normalized',...
-        'UserData',             inputs{index,1},...
-        'Position',             [.9,b,.1,h],...
-        'Value',                val,...
-        'Callback',             @(hObject,eventdata)ToggleAuto(hObject, eventdata, guidata(hObject)));
+    if ~isempty(val)
+        gd.gui.sliders.state.(inputs{index,1}) = uicontrol(...
+            'Style',                'popupmenu',...
+            'String',               gd.Internal.settings.modes,...
+            'Parent',               gd.gui.sliders.panel,...
+            'Units',                'normalized',...
+            'UserData',             inputs{index,1},...
+            'Position',             [.9,b,.1,h],...
+            'Value',                val,...
+            'Callback',             @(hObject,eventdata)ToggleAuto(hObject, eventdata, guidata(hObject)));
+            gd.Internal.settings.handles = [gd.Internal.settings.handles,gd.gui.sliders.state.(inputs{index,1})];
+    else
+        gd.gui.sliders.state.(inputs{index,1}) = [];
+    end
 end
 gd.Internal.settings.inputs = inputs;
 
@@ -290,7 +297,9 @@ for index = 1:gd.Internal.settings.num
     gd.gui.sliders.(str).Max = temp.ConstraintValue(2);     % set upper bound
     
     % Set mode
-    gd.src.(sprintf('%sMode',str)) = gd.Internal.settings.modes{gd.gui.sliders.state.(str).Value}; % set mode
+    if ~isempty(gd.gui.sliders.state.(str))
+        gd.src.(sprintf('%sMode',str)) = gd.Internal.settings.modes{gd.gui.sliders.state.(str).Value}; % set mode
+    end
     
     % Set value
     if val<temp.ConstraintValue(1)      % ensure value is above lower bound
@@ -299,6 +308,8 @@ for index = 1:gd.Internal.settings.num
         val = temp.ConstraintValue(2);
     end
     gd.src.(str) = val;                 % set value
+    gd.gui.sliders.(str).Value = val;   % update gui slider
+    gd.gui.sliders.text.(str).String = sprintf('%s: %.3f',str,val); % update gui text
     
 end
 gd.src.TriggerDelayMode = 'Off'; %'Off' or 'Manual'
@@ -342,7 +353,6 @@ function gd = TestFrameRate(hObject, eventdata, gd)
 triggerconfig(gd.vid, 'immediate'); % set trigger type
 gd.vid.FramesPerTrigger = 100;      % set number of frames to capture
 gd.vid.LoggingMode = 'memory';      % set to log frames to memory
-gd.src.FrameRatePercentage = 100;   % set to max frame rate
 start(gd.vid);                      % start acquisition
 wait(gd.vid,120);                   % wait for acquisition to stop
 [f,t,m] = getdata(gd.vid);          % acquire timestamps
@@ -390,14 +400,14 @@ if hObject.Value
     % Update GUI
     set(hObject,'String','Stop','BackgroundColor',[1,0,0]);
     set([gd.gui.file.dir,gd.gui.file.base,gd.gui.file.index],'Enable','off');
-    set([gd.gui.control.trigger,gd.gui.control.snap,gd.gui.control.frameRate,gd.gui.axes.format],'Enable','off');
-    set(struct2cell(gd.gui.sliders),'Enable','off');
+    set([gd.gui.control.trigger,gd.gui.control.snap,gd.gui.axes.format],'Enable','off');
+    set(gd.Internal.settings.handles,'Enable','off');
     
     % Set frame rate
     gd.Experiment.imaging.frameRate = gd.gui.sliders.FrameRate.Value;
     
     % Set trigger properties
-    if gd.gui.control.source.Value
+    if gd.gui.control.trigger.Value
         triggerconfig(gd.vid, 'immediate'); % internal
         gd.vid.FramesPerTrigger = Inf;
     else
@@ -486,8 +496,8 @@ else
     % Update GUI
     guidata(hObject,gd);
     set([gd.gui.file.dir,gd.gui.file.base,gd.gui.file.index],'Enable','on');
-    set([gd.gui.control.trigger,gd.gui.control.snap,gd.gui.control.frameRate,gd.gui.axes.format],'Enable','on');
-    set(struct2cell(gd.gui.sliders),'Enable','on');
+    set([gd.gui.control.trigger,gd.gui.control.snap,gd.gui.axes.format],'Enable','on');
+    set(gd.Internal.settings.handles,'Enable','on');
     set(hObject,'String','Capture Images?','BackgroundColor',[0,1,0]);
 end
 end
