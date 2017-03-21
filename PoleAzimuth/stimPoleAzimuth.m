@@ -5,11 +5,9 @@ function [TrialInfo, SaveFile] = stimPoleAzimuth(SaveFile, varargin)
 gd.Internal.ImagingType = 'scim';               % 'sbx' or 'scim'
 gd.Internal.ImagingComp.ip = '128.32.173.30';   % SCANBOX ONLY: for UDP
 gd.Internal.ImagingComp.port = 7000;            % SCANBOX ONLY: for UDP
-gd.Internal.LinearStage.APport = 'com3';
-gd.Internal.LinearStage.MLport = 'com4';
 
 Display.units = 'pixels';
-Display.position = [400, 400, 1400, 500];
+Display.position = [400, 400, 1400, 600];
 
 gd.Internal.save.path = 'C:\Users\Resonant-2\OneDrive\StimData';
 if ~isdir(gd.Internal.save.path)
@@ -29,18 +27,17 @@ gd.Experiment.timing.ITI = 4.5;             % in seconds
 gd.Experiment.timing.randomITImax = 2;      % in seconds
 
 gd.Experiment.params.samplingFrequency = 30000;
-gd.Experiment.params.angleMove = 30;            % positive scalar:  default angle for stepper motor to move each trial
 gd.Experiment.params.numTrials = 5;             % positive integer: default # of trials to present
-gd.Experiment.params.randomITI = false;         % true or false:    add on random time to ITI?
-gd.Experiment.params.catchTrials = true;        % true or false:    give control stimulus?
+gd.Experiment.params.randomITI = false;         % booleon:          add on random time to ITI?
+gd.Experiment.params.catchTrials = true;        % booleon:          give control stimulus?
 gd.Experiment.params.numCatchesPerBlock = 1;    % positive integer: default # of catch trials to present per block
-gd.Experiment.params.repeatBadTrials = false;   % true or false:    repeat non-running trials
+gd.Experiment.params.repeatBadTrials = false;   % booleon:          repeat non-running trials
 gd.Experiment.params.speedThreshold = 100;      % positive scalar:  velocity threshold for good running trials (deg/s)
-gd.Experiment.params.whiskerTracking = false;   % true or false:    send triggers for whisker tracking camera?
+gd.Experiment.params.whiskerTracking = false;   % booleon:          send triggers for whisker tracking camera?
 gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
-gd.Experiment.params.blockShuffle = true;       % true or false:    shuffle block order each block?
-% gd.Experiment.params.runSpeed = true;           % ture or false;    record rotary encoder's velocity? % temporarily commented out
-gd.Experiment.params.holdStart = true;          % true or false:    wait to start experiment until after first frame trigger received?
+gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle block order each block?
+gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
+gd.Experiment.params.holdStart = true;          % booleon:          wait to start experiment until after first frame trigger received?
 gd.Experiment.params.delay = 3;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
 
 % Text user details
@@ -51,27 +48,26 @@ gd.Internal.textUser.carrier = 'att';
 gd.Internal.buffer.numTrials = 2;           %4*gd.Experiment.params.samplingFrequency * (gd.Experiment.timing.stimDuration+gd.Experiment.timing.ITI);
 gd.Internal.buffer.downSample = 30;
 
+% Stim dependent variables
+gd.Experiment.params.angleMove = 30;        % positive scalar:  default angle for stepper motor to move each trial
+gd.Internal.LinearStage.APport = 'com3';    % string:           specifies port
+gd.Internal.LinearStage.MLport = 'com4';    % string:           specifies port
+
 
 %% Parse input arguments
-% index = 1;
-% while index<=length(varargin)
-%     try
-%         switch varargin{index}
-%             case 'stimDuration'
-%                 gd.Experiment.timing.stimDuration = varargin{index+1};
-%                 index = index + 2;
-%             case 'control'
-%                 gd.Experiment.params.catchTrials = varargin{index+1};
-%                 index = index + 2;
-%             otherwise
-%                 warning('Argument ''%s'' not recognized',varargin{index});
-%                 index = index + 1;
-%         end
-%     catch
-%         warning('Argument %d not recognized',index);
-%         index = index + 1;
-%     end
-% end
+index = 1;
+while index<=length(varargin)
+    try
+        switch varargin{index}
+            otherwise
+                warning('Argument ''%s'' not recognized',varargin{index});
+                index = index + 1;
+        end
+    catch
+        warning('Argument %d not recognized',index);
+        index = index + 1;
+    end
+end
 
 if exist('SaveFile', 'var')
     gd.Experiment.saving.SaveFile = SaveFile;
@@ -81,7 +77,7 @@ end
 
 %% Create & Populate Figure
 
-% Create figure & panels
+% Create figure
 gd.fig = figure(...
     'NumberTitle',          'off',...
     'Name',                 'Stimulus: Vertical Pole',...
@@ -89,6 +85,8 @@ gd.fig = figure(...
     'Units',                Display.units,...
     'Position',             Display.position);%,...
 % 'KeyPressFcn',          @(hObject,eventdata)KeyPressCallback(hObject, eventdata, guidata(hObject)));
+
+% Create Panels
 gd.Saving.panel = uipanel(...
     'Title',                'Filename',...
     'Parent',               gd.fig,...
@@ -648,7 +646,8 @@ CreateFilename(gd.Saving.FullFilename, [], gd);
 end
 
 
-%% FILENAME CALLBACKS
+%% SAVING CALLBACKS
+
 function ChooseDir(hObject, eventdata, gd)
 temp = uigetdir(gd.Internal.save.path, 'Choose directory to save to');
 if ischar(temp)
@@ -990,8 +989,8 @@ if hObject.Value
         %% Initialize NI-DAQ session
         gd.Internal.daq = [];
         
-        DAQ = daq.createSession('ni'); % initialize session
-        DAQ.IsContinuous = true; % set session to be continuous (call's 'DataRequired' listener)
+        DAQ = daq.createSession('ni');                  % initialize session
+        DAQ.IsContinuous = true;                        % set session to be continuous (call's 'DataRequired' listener)
         DAQ.Rate = Experiment.params.samplingFrequency; % set sampling frequency
         Experiment.params.samplingFrequency = DAQ.Rate; % the actual sampling frequency is rarely perfect from what is input
         
@@ -1047,10 +1046,6 @@ if hObject.Value
         DAQ.addlistener('DataAvailable', @SaveDataIn);  % create listener for when data is returned
         % DAQ.NotifyWhenDataAvailableExceeds = round(DAQ.Rate/100);
 
-        % Compute timing of each trial
-        Experiment.timing.trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
-        Experiment.timing.numScansPerTrial = ceil(Experiment.params.samplingFrequency * Experiment.timing.trialDuration);
-        
         
         %% Determine stimuli
         
@@ -1076,6 +1071,16 @@ if hObject.Value
         
         %% Create triggers
         
+        % Compute timing of each trial
+        Experiment.timing.trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
+        Experiment.timing.numScansPerTrial = ceil(Experiment.params.samplingFrequency * Experiment.timing.trialDuration);
+        
+        % Adjust Callback timing so next trial is queued right after previous trial starts
+        DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
+        
+        % Initialize blank triggers
+        Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.params.catchTrials+1);
+        
         % Build stepper motor triggers
         stepTriggers = moveStepperMotor(Experiment.params.angleMove, Experiment.params.samplingFrequency, 1, 2, false, 2);
         numStepTriggers = size(stepTriggers, 1);
@@ -1087,12 +1092,6 @@ if hObject.Value
         end
         startTrig = numITITriggers-numStepTriggers+1;                    % move during end of ITI but leave room for bar moving out
         endTrig = Experiment.timing.numScansPerTrial-numStepTriggers+1;  % bar moving out occurs during ITI but is queued with previous trial
-        
-        % Adjust Callback timing so next trial is queued right after previous trial starts
-        DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
-
-        % Initialize triggers
-        Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.params.catchTrials+1);
 
         % Trigger imaging computer on every single trial
         Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels,'O_2PTrigger'), :) = 1; % trigger at beginning and end of stimulus
@@ -1175,22 +1174,24 @@ if hObject.Value
         ImagingType = Experiment.ImagingType;
         ImagingMode = Experiment.ImagingMode;
         numScansBaseline = Experiment.params.samplingFrequency * numSecondsBaseline;
-        ActiveAxes = find(Experiment.stim.activeAxes);
         numStimuli = numel(Experiment.StimID);
-        Triggers = Experiment.Triggers;
-        Positions = Experiment.Position;
         currentBlockOrder = Block;
         numBlock = numel(currentBlockOrder);
         ControlTrial = Experiment.params.catchTrials;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
-        currentNewTrial = 0;
-        preppedTrial = false;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
         saveOut = Experiment.saving.save;
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
         
+        % Stim dependent
+        ActiveAxes = find(Experiment.stim.activeAxes);
+        Triggers = Experiment.Triggers;
+        Positions = Experiment.Position;
+        preppedTrial = false;
+        currentNewTrial = 0;
+
         % If adding random ITI
         if Experiment.params.randomITI
             MaxRandomScans = floor(Experiment.timing.randomITImax*Experiment.params.samplingFrequency);
@@ -1266,13 +1267,13 @@ if hObject.Value
             if ~strcmp(ImagingMode,'Trial Imaging')
                 fprintf(H_Scanbox,'S'); % stop imaging
             end
-            fclose(H_Scanbox);      % close connection
+            fclose(H_Scanbox);          % close connection
         end
         
         % If saving: append stop time, close file, & increment file index
         if saveOut
-            save(SaveFile, 'Experiment', '-append'); % update with "Experiment.timing.finish" info
-            fclose(H_DataFile);                      % close binary file
+            save(SaveFile, 'Experiment', '-append');        % update with "Experiment.timing.finish" info
+            fclose(H_DataFile);                             % close binary file
             gd.Saving.index.String = sprintf('%03d',str2double(gd.Saving.index.String) + 1); % increment file index for next experiment
             CreateFilename(gd.Saving.FullFilename, [], gd); % update filename for next experiment
         end
@@ -1465,17 +1466,17 @@ end
             % Queue triggers
             if TrialInfo.StimID(currentTrial) ~= 0              % current trial is not control trial
                 if ~MaxRandomScans                              % do not add random ITI
-                    DAQ.queueOutputData(Triggers(:,:,1));       % queue normal stim triggers
+                    DAQ.queueOutputData(Triggers(:,:,1));       % queue stim triggers
                 else
                     TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
-                    DAQ.queueOutputData(cat(1,Triggers(:,:,1),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue normal stim triggers with extra scans
+                    DAQ.queueOutputData(cat(1,Triggers(:,:,1),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue stim triggers with extra scans
                 end
             else                                                % current trial is control trial
                 if ~MaxRandomScans                              % do not add random ITI
-                    DAQ.queueOutputData(Triggers(:,:,2));       % queue normal control triggers
+                    DAQ.queueOutputData(Triggers(:,:,2));       % queue control triggers
                 else
                     TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
-                    DAQ.queueOutputData(cat(1,Triggers(:,:,2),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue normal control triggers with extra scans
+                    DAQ.queueOutputData(cat(1,Triggers(:,:,2),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue control triggers with extra scans
                 end
             end
             
