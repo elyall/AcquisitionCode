@@ -16,14 +16,14 @@ end
 gd.Internal.save.base = '0000';
 gd.Internal.save.depth = '000';
 gd.Internal.save.index = '000';
+gd.Internal.save.save = true;
 
-gd.Experiment.saving.save = true;
 gd.Experiment.saving.SaveFile = fullfile(gd.Internal.save.path, gd.Internal.save.base);
 gd.Experiment.saving.DataFile = '';
 gd.Experiment.saving.dataPrecision = 'uint16';
 
-gd.Experiment.timing.stimDuration = 1.5;    % in seconds
-gd.Experiment.timing.ITI = 4.5;             % in seconds
+gd.Experiment.timing.stimDuration = 0.5;    % in seconds
+gd.Experiment.timing.ITI = 1.5;             % in seconds
 gd.Experiment.timing.randomITImax = 2;      % in seconds
 
 gd.Experiment.params.samplingFrequency = 30000;
@@ -56,6 +56,7 @@ gd.Experiment.stim.setup = table(...
     'VariableNames',{'Name','Port','Active'});
 gd.Experiment.stim.pistonCombinations = {};
 gd.Internal.daq = []; % Place holder for offline control of stimulus
+gd.Internal.numStimuliRepetitions = 3; % default number of blocks to run
 
 
 %% Parse input arguments
@@ -461,7 +462,7 @@ guidata(gd.fig, gd); % save guidata
 %% Initialize Defaults
 
 % Saving
-if gd.Experiment.saving.save
+if gd.Internal.save.save
     set(gd.Saving.save,'Value',true,'String','Saving','BackgroundColor',[0,1,0]);
 end
 
@@ -724,7 +725,7 @@ if hObject.Value
         
         %% Determine filenames to save to
         if gd.Saving.save.Value
-            Experiment.saving.save = true;
+            saveOut = true;
             % mat file
             if exist(Experiment.saving.SaveFile, 'file')
                 answer = questdlg(sprintf('File already exists! Continue?\n%s', Experiment.saving.SaveFile), 'Overwrite file?', 'Yes', 'No', 'No');
@@ -737,16 +738,14 @@ if hObject.Value
             % bin file
             Experiment.saving.DataFile = strcat(Experiment.saving.SaveFile(1:end-4), '.bin');
         else
-            Experiment.saving.save = false;
+            saveOut = false;
         end
         
         %% Set parameters
         
-        Experiment.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
-        Experiment.ImagingMode = gd.Parameters.imagingMode.String{gd.Parameters.imagingMode.Value};
-        
-        Experiment.params.angleMove = str2double(gd.Controls.stepAngle.String);
-        
+        Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
+        Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
+                
         Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
         
         Experiment.timing.ITI = str2double(gd.Parameters.ITI.String);
@@ -758,7 +757,7 @@ if hObject.Value
             Experiment.timing.randomITImax = false;
         end
         
-        Experiment.params.catchTrials = gd.Parameters.control;
+        Experiment.params.catchTrials = gd.Parameters.control.Value;
         if Experiment.params.catchTrials
             Experiment.params.numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
         else
@@ -784,7 +783,7 @@ if hObject.Value
         Experiment.params.runSpeed = gd.Parameters.runSpeed.Value;
         
         Experiment.params.holdStart = gd.Parameters.holdStart.Value;
-        Experiment.params.delay = str2double(Experiment.params.delay.String);
+        Experiment.params.delay = str2double(gd.Parameters.delay.String);
         
         %% Initialize button
         hObject.BackgroundColor = [0,0,0];
@@ -851,19 +850,23 @@ if hObject.Value
         DAQ.addlistener('DataAvailable', @SaveDataIn);  % create listener for when data is returned
         % DAQ.NotifyWhenDataAvailableExceeds = round(DAQ.Rate/100);
 
-        
-        
-        
+
         %% Determine stimuli
         
         % Determine stimulus IDs
-        Experiment.StimID = 1:numel(gd.Experiment.stim.pistonCombinations);
-        
-        % Determine if presenting control stimulus
+        Experiment.StimID = 1:numel(Experiment.stim.pistonCombinations);
         if Experiment.params.catchTrials
             Experiment.StimID = [0, Experiment.StimID];
+            Experiment.stim.pistonCombinations = [{[]};Experiment.stim.pistonCombinations];
         end
-        
+        numStimuli = numel(Experiment.StimID);
+
+        % Create stim matrix (only used during analysis)
+        Experiment.stim.stim = false(numStimuli,nnz(Experiment.stim.setup.Active));
+        List = find(Experiment.stim.setup.Active);
+        for index = 1:numStimuli
+            Experiment.stim.stim(index,ismember(List,Experiment.stim.pistonCombinations{index})) = true;
+        end
         
         %% Create triggers
         
@@ -911,7 +914,7 @@ if hObject.Value
         
         
         %% Initialize imaging session (scanbox only)
-        if strcmp(Experiment.ImagingType, 'sbx')
+        if strcmp(Experiment.imaging.ImagingType, 'sbx')
             H_Scanbox = udp(gd.Internal.ImagingComp.ip, 'RemotePort', gd.Internal.ImagingComp.port); % create udp port handle
             fopen(H_Scanbox);
             fprintf(H_Scanbox,sprintf('A%s',gd.Saving.base.String));
@@ -920,7 +923,7 @@ if hObject.Value
         end
         
         %% Initialize saving
-        if Experiment.saving.save
+        if saveOut
             save(SaveFile, 'DAQChannels', 'Experiment', '-mat', '-v7.3');
             H_DataFile = fopen(Experiment.saving.DataFile, 'w');
         end
@@ -929,17 +932,14 @@ if hObject.Value
         
         % Necessary variables
         numTrialsObj = gd.Run.numTrials;
-        ImagingType = Experiment.ImagingType;
-        ImagingMode = Experiment.ImagingMode;
+        ImagingType = Experiment.imaging.ImagingType;
+        ImagingMode = Experiment.imaging.ImagingMode;
         numScansBaseline = Experiment.params.samplingFrequency * numSecondsBaseline;
-        numStimuli = numel(Experiment.StimID);
         currentBlockOrder = Block;
         numBlock = numel(currentBlockOrder);
-        ControlTrial = Experiment.params.catchTrials;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
-        saveOut = Experiment.saving.save;
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
         
@@ -996,7 +996,7 @@ if hObject.Value
         %% Start Experiment
         
         % Start imaging
-        if strcmp(Experiment.ImagingType, 'sbx')
+        if strcmp(Experiment.imaging.ImagingType, 'sbx')
             if ~strcmp(ImagingMode,'Trial Imaging')
                 fprintf(H_Scanbox,'G'); % start imaging
             end
@@ -1019,7 +1019,7 @@ if hObject.Value
         %% End Experiment
         
         % Scanbox only: stop imaging
-        if strcmp(Experiment.ImagingType, 'sbx')
+        if strcmp(Experiment.imaging.ImagingType, 'sbx')
             if ~strcmp(ImagingMode,'Trial Imaging')
                 fprintf(H_Scanbox,'S'); % stop imaging
             end

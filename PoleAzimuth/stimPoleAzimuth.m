@@ -16,8 +16,8 @@ end
 gd.Internal.save.base = '0000';
 gd.Internal.save.depth = '000';
 gd.Internal.save.index = '000';
+gd.Internal.save.save = true;
 
-gd.Experiment.saving.save = true;
 gd.Experiment.saving.SaveFile = fullfile(gd.Internal.save.path, gd.Internal.save.base);
 gd.Experiment.saving.DataFile = '';
 gd.Experiment.saving.dataPrecision = 'uint16';
@@ -592,7 +592,7 @@ guidata(gd.fig, gd); % save guidata
 %% Initialize Defaults
 
 % Saving
-if gd.Experiment.saving.save
+if gd.Internal.save.save
     set(gd.Saving.save,'Value',true,'String','Saving','BackgroundColor',[0,1,0]);
 end
 
@@ -919,7 +919,7 @@ if hObject.Value
         
         %% Determine filenames to save to
         if gd.Saving.save.Value
-            Experiment.saving.save = true;
+            saveOut = true;
             % mat file
             if exist(Experiment.saving.SaveFile, 'file')
                 answer = questdlg(sprintf('File already exists! Continue?\n%s', Experiment.saving.SaveFile), 'Overwrite file?', 'Yes', 'No', 'No');
@@ -932,16 +932,14 @@ if hObject.Value
             % bin file
             Experiment.saving.DataFile = strcat(Experiment.saving.SaveFile(1:end-4), '.bin');
         else
-            Experiment.saving.save = false;
+            saveOut = false;
         end
         
         %% Set parameters
         
-        Experiment.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
-        Experiment.ImagingMode = gd.Parameters.imagingMode.String{gd.Parameters.imagingMode.Value};
+        Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
+        Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
         
-        Experiment.params.angleMove = str2double(gd.Controls.stepAngle.String);
-
         Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
         
         Experiment.timing.ITI = str2double(gd.Parameters.ITI.String);
@@ -953,7 +951,7 @@ if hObject.Value
             Experiment.timing.randomITImax = false;
         end
         
-        Experiment.params.catchTrials = gd.Parameters.control;
+        Experiment.params.catchTrials = gd.Parameters.control.Value;
         if Experiment.params.catchTrials
             Experiment.params.numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
         else
@@ -979,8 +977,11 @@ if hObject.Value
         Experiment.params.runSpeed = gd.Parameters.runSpeed.Value;
         
         Experiment.params.holdStart = gd.Parameters.holdStart.Value;
-        Experiment.params.delay = str2double(Experiment.params.delay.String);
+        Experiment.params.delay = str2double(gd.Parameters.delay.String);
         
+        % Stim specific
+        Experiment.params.angleMove = str2double(gd.Controls.stepAngle.String);
+
         %% Initialize button
         hObject.BackgroundColor = [0,0,0];
         hObject.ForegroundColor = [1,1,1];
@@ -1060,14 +1061,13 @@ if hObject.Value
         % Determine stimulus IDs
         [Experiment.Position,~,Block] = unique(Experiment.Position,'rows');
         Experiment.StimID = 1:size(Experiment.Position,1);
-        
-        % Determine if presenting control stimulus
         if Experiment.params.catchTrials
             Experiment.StimID = [0, Experiment.StimID];
             Block = [zeros(Experiment.params.numCatchesPerBloc,1); Block];
             Experiment.Position = [nan(1,2); Experiment.Position];
         end
-        
+        numStimuli = numel(Experiment.StimID);
+
         
         %% Create triggers
         
@@ -1151,7 +1151,7 @@ if hObject.Value
         
         
         %% Initialize imaging session (scanbox only)
-        if strcmp(Experiment.ImagingType, 'sbx')
+        if strcmp(Experiment.imaging.ImagingType, 'sbx')
             H_Scanbox = udp(gd.Internal.ImagingComp.ip, 'RemotePort', gd.Internal.ImagingComp.port); % create udp port handle
             fopen(H_Scanbox);
             fprintf(H_Scanbox,sprintf('A%s',gd.Saving.base.String));
@@ -1161,7 +1161,7 @@ if hObject.Value
         
         
         %% Initialize saving
-        if Experiment.saving.save
+        if saveOut
             save(SaveFile, 'DAQChannels', 'Experiment', '-mat', '-v7.3');
             H_DataFile = fopen(Experiment.saving.DataFile, 'w');
         end
@@ -1171,17 +1171,15 @@ if hObject.Value
         
         % Necessary variables
         numTrialsObj = gd.Run.numTrials;
-        ImagingType = Experiment.ImagingType;
-        ImagingMode = Experiment.ImagingMode;
+        ImagingType = Experiment.imaging.ImagingType;
+        ImagingMode = Experiment.imaging.ImagingMode;
         numScansBaseline = Experiment.params.samplingFrequency * numSecondsBaseline;
-        numStimuli = numel(Experiment.StimID);
         currentBlockOrder = Block;
         numBlock = numel(currentBlockOrder);
         ControlTrial = Experiment.params.catchTrials;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
-        saveOut = Experiment.saving.save;
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
         
@@ -1240,7 +1238,7 @@ if hObject.Value
         %% Start Experiment
         
         % Start imaging
-        if strcmp(Experiment.ImagingType, 'sbx')
+        if strcmp(Experiment.imaging.ImagingType, 'sbx')
             if ~strcmp(ImagingMode,'Trial Imaging')
                 fprintf(H_Scanbox,'G'); % start imaging
             end
@@ -1263,7 +1261,7 @@ if hObject.Value
         %% End Experiment
         
         % Scanbox only: stop imaging
-        if strcmp(Experiment.ImagingType, 'sbx')
+        if strcmp(Experiment.imaging.ImagingType, 'sbx')
             if ~strcmp(ImagingMode,'Trial Imaging')
                 fprintf(H_Scanbox,'S'); % stop imaging
             end
@@ -1305,7 +1303,7 @@ if hObject.Value
         
         % Close any open connections
         try
-            if strcmp(Experiment.ImagingType, 'sbx')
+            if strcmp(Experiment.imaging.ImagingType, 'sbx')
                 fprintf(H_Scanbox,'S'); %stop
                 fclose(H_Scanbox);
             end
