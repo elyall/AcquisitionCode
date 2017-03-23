@@ -39,6 +39,8 @@ gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle bloc
 gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
 gd.Experiment.params.holdStart = true;          % booleon:          wait to start experiment until after first frame trigger received?
 gd.Experiment.params.delay = 3;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
+gd.Experiment.params.autoNumTrials = true;      % booleon:          automatically updates number of trials when parameters are adjusted
+gd.Experiment.params.numBlocks = 5;             % positive scalar:  specifies default number of blocks to run
 
 % Text user details
 gd.Internal.textUser.number = '7146241885';
@@ -56,7 +58,6 @@ gd.Experiment.stim.setup = table(...
     'VariableNames',{'Name','Port','Active'});
 gd.Experiment.stim.pistonCombinations = {};
 gd.Internal.daq = []; % Place holder for offline control of stimulus
-gd.Internal.numStimuliRepetitions = 3; % default number of blocks to run
 
 
 %% Parse input arguments
@@ -315,7 +316,8 @@ gd.Parameters.controlNum = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Enable',               'off',...
     'Units',                'normalized',...
-    'Position',             [w1+w2,.6,w3,.1]);
+    'Position',             [w1+w2,.6,w3,.1],...
+    'Callback',             @(hObject,eventdata)DetermineNumTrials(guidata(hObject)));
 % repeat bad trials toggle
 gd.Parameters.repeatBadTrials = uicontrol(...
     'Style',                'checkbox',...
@@ -418,6 +420,31 @@ gd.Parameters.runSpeed = uicontrol(...
     'Position',             [.5,.2,.5,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Record velocity?','Recording velocity'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+% auto-update number of trials
+gd.Parameters.autoNumTrials = uicontrol(...
+    'Style',                'checkbox',...
+    'String',               'Auto update # of trials?',...
+    'Value',                gd.Experiment.params.autoNumTrials,...
+    'UserData',             'autoNumTrials',...
+    'Parent',               gd.Parameters.panel,...
+    'Units',                'normalized',...
+    'Position',             [0,.1,w1,.1],...
+    'Callback',             @(hObject,eventdata)DetermineNumTrials(guidata(hObject)));
+% number of blocks
+gd.Parameters.numBlocks = uicontrol(...
+    'Style',                'text',...
+    'String',               '# of blocks',...
+    'HorizontalAlignment',  'right',...
+    'Parent',               gd.Parameters.panel,...
+    'Units',                'normalized',...
+    'Position',             [w1,.1,w2,.1]);
+gd.Parameters.numBlocksInput = uicontrol(...
+    'Style',                'edit',...
+    'String',               gd.Experiment.params.numBlocks,...
+    'Parent',               gd.Parameters.panel,...
+    'Units',                'normalized',...
+    'Position',             [w1+w2,.1,w3,.1],...
+    'Callback',             @(hObject,eventdata)DetermineNumTrials(guidata(hObject)));
 
 % EXPERIMENT
 % number of trials
@@ -434,13 +461,20 @@ gd.Run.numTrials = uicontrol(...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
     'Position',             [.15,.9,.15,.1]);
+% estimated time
+gd.Run.estTime = uicontrol(...
+    'Style',                'text',...
+    'String',               'Est time: N/A sec',...
+    'Parent',               gd.Run.panel,...
+    'Units',                'normalized',...
+    'Position',             [0,.85,.3,.05]);
 % send text message when complete
 gd.Run.textUser = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Send text?',...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [0,.8,.3,.1],...
+    'Position',             [0,.8,.3,.05],...
     'UserData',             {[.94,.94,.94;0,1,0],'Send text?','Sending text'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 % run button
@@ -507,13 +541,27 @@ if gd.Experiment.params.holdStart
     set(gd.Parameters.holdStart,'Value',true,'String','Waiting for frame trigs','BackgroundColor',[0,1,0]);
 end
 
+try
+%     gd = initDAQ(gd);
+    gd.Internal.daq = daq.createSession('ni');
+    gd.Internal.daq.addDigitalChannel('Dev1', gd.Experiment.stim.setup.Port, 'OutputOnly');
+end
 CreateFilename(gd.Saving.FullFilename, [], gd);
 
 end
 
+% function gd = initDAQ(gd)
+% gd.Internal.daq = daq.createSession('ni');
+% gd.Internal.daq.addDigitalChannel('Dev1', gd.Experiment.stim.setup.Port, 'OutputOnly');
+% end
+
 %% KEYPRESS CALLBACK
 function KeyPressCallback(hObject, eventdata, gd)
-disp('a');
+if ismember(eventdata.Key,num2str(1:size(gd.Stimuli.ports.Data,1)))
+    Port = str2double(eventdata.Key);
+    gd.Stimuli.ports.Data{Port,4} = ~gd.Stimuli.ports.Data{Port,4};
+%     gd.Internal.daq.outputSingleScan([gd.Stimuli.ports.Data{:,4}]);
+end
 end
 
 %% SAVING CALLBACKS
@@ -561,11 +609,13 @@ end
 
 function EditPorts(hObject, eventdata, gd)
 if eventdata.Indices(2)==4 % Trigger port
-    if isempty(gd.Internal.daq)
-        gd.Internal.daq = daq.createSession('ni');
-        gd.Internal.daq.addDigitalChannel('Dev1', gd.Experiment.stim.setup.Port, 'OutputOnly');
-    end
+%     if isempty(gd.Internal.daq)
+%         gd.Internal.daq = daq.createSession('ni');
+%         gd.Internal.daq.addDigitalChannel('Dev1', gd.Experiment.stim.setup.Port, 'OutputOnly');
+%     end
+try
     gd.Internal.daq.outputSingleScan([hObject.Data{:,4}]);
+end
 else % Save user changes
     gd.Experiment.stim.setup = cell2table(hObject.Data(:,1:3),'VariableNames',{'Name','Port','Active'}); % save edits
     EditCombinations(gd.Stimuli.editCombinations, 'edit', gd);
@@ -617,7 +667,7 @@ gd.Stimuli.list.Data = cellfun(@num2str, stimuli, 'UniformOutput',false);
 gd.Experiment.stim.pistonCombinations = stimuli;
 
 % Update number of trials
-gd.Run.numTrials.String = num2str(size(stimuli,1)*gd.Internal.numStimuliRepetitions);
+DetermineNumTrials(gd);
 
 guidata(hObject, gd);
 
@@ -678,6 +728,7 @@ else
     set(hObject,'String','Catch Trials?','BackgroundColor',[.94,.94,.94]);
     set([gd.Parameters.controlText,gd.Parameters.controlNum],'Enable','off');
 end
+DetermineNumTrials(gd);
 end
 
 function toggleRepeatBadTrials(hObject, eventdata, gd)
@@ -708,6 +759,29 @@ if newValue <= 0
 end
 gd.Experiment.params.frameRateWT = newValue;
 guidata(hObject, gd);
+end
+
+function DetermineNumTrials(gd)
+if ~gd.Parameters.autoNumTrials.Value
+    gd.Parameters.autoNumTrials.String = 'Auto update # of trials?';
+    gd.Parameters.autoNumTrials.BackgroundColor = [.94,.94,.94];
+    return
+else
+    gd.Parameters.autoNumTrials.String = 'Auto upating # of trials';
+    gd.Parameters.autoNumTrials.BackgroundColor = [0,1,0];
+end
+numStim = numel(gd.Experiment.stim.pistonCombinations);
+if ~numStim
+    return
+end
+numBlocks = str2double(gd.Parameters.numBlocksInput.String);
+if gd.Parameters.control.Value
+    numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
+else
+    numCatchesPerBlock = 0;
+end
+numTrials = numBlocks*(numStim+numCatchesPerBlock);
+gd.Run.numTrials.String = num2str(numTrials);
 end
 
 %% RUN EXPERIMENT
@@ -1026,6 +1100,9 @@ if hObject.Value
             fclose(H_Scanbox);          % close connection
         end
         
+%         % Reset DAQ
+%         gd = initDAQ(gd);
+        
         % If saving: append stop time, close file, & increment file index
         if saveOut
             save(SaveFile, 'Experiment', '-append');        % update with "Experiment.timing.finish" info
@@ -1057,6 +1134,9 @@ if hObject.Value
             end
         end
         clear DAQ H_Scanbox
+        
+%         % Reset DAQ
+%         gd = initDAQ(gd);
         
         % Rethrow error
         rethrow(ME);
