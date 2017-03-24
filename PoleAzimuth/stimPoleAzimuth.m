@@ -1074,10 +1074,7 @@ if hObject.Value
         % Compute timing of each trial
         Experiment.timing.trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
         Experiment.timing.numScansPerTrial = ceil(Experiment.params.samplingFrequency * Experiment.timing.trialDuration);
-        
-        % Adjust Callback timing so next trial is queued right after previous trial starts
-        DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
-        
+          
         % Initialize blank triggers
         Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.params.catchTrials+1);
         
@@ -1093,6 +1090,9 @@ if hObject.Value
         startTrig = numITITriggers-numStepTriggers+1;                    % move during end of ITI but leave room for bar moving out
         endTrig = Experiment.timing.numScansPerTrial-numStepTriggers+1;  % bar moving out occurs during ITI but is queued with previous trial
 
+        % Adjust Callback timing so next trial is queued right after previous trial starts
+        DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
+        
         % Trigger imaging computer on every single trial
         Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels,'O_2PTrigger'), :) = 1; % trigger at beginning and end of stimulus
         % Experiment.Triggers(startTrig:endTrig-1, strcmp(OutChannels,'O_2PTrigger'), :) = 1; % high during whole stimulus
@@ -1179,6 +1179,7 @@ if hObject.Value
         ControlTrial = Experiment.params.catchTrials;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
+        currentNewTrial = 0;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
@@ -1188,7 +1189,6 @@ if hObject.Value
         Triggers = Experiment.Triggers;
         Positions = Experiment.Position;
         preppedTrial = false;
-        currentNewTrial = 0;
 
         % If adding random ITI
         if Experiment.params.randomITI
@@ -1295,12 +1295,6 @@ if hObject.Value
     catch ME
         warning('Running experiment failed');
         
-        % Reset button properties
-        hObject.Value = false;
-        hObject.BackgroundColor = [.94,.94,.94];
-        hObject.ForegroundColor = [0,0,0];
-        hObject.String = 'Run';
-        
         % Close any open connections
         try
             if strcmp(Experiment.imaging.ImagingType, 'sbx')
@@ -1312,6 +1306,17 @@ if hObject.Value
             end
         end
         clear DAQ H_Scanbox H_LinearStage
+        
+        % Text user
+        if gd.Run.textUser.Value
+            send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'','Experiment failed!');
+        end
+        
+        % Reset button properties
+        hObject.Value = false;
+        hObject.BackgroundColor = [.94,.94,.94];
+        hObject.ForegroundColor = [0,0,0];
+        hObject.String = 'Run';
         
         % Rethrow error
         rethrow(ME);

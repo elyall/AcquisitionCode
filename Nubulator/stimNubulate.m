@@ -27,7 +27,7 @@ gd.Experiment.timing.ITI = 1.5;             % in seconds
 gd.Experiment.timing.randomITImax = 2;      % in seconds
 
 gd.Experiment.params.samplingFrequency = 30000;
-gd.Experiment.params.numTrials = 5;             % positive integer: default # of trials to present
+gd.Experiment.params.numBlocks = 5;             % positive integer: default # of blocks to present
 gd.Experiment.params.randomITI = false;         % booleon:          add on random time to ITI?
 gd.Experiment.params.catchTrials = true;        % booleon:          give control stimulus?
 gd.Experiment.params.numCatchesPerBlock = 1;    % positive integer: default # of catch trials to present per block
@@ -39,8 +39,6 @@ gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle bloc
 gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
 gd.Experiment.params.holdStart = true;          % booleon:          wait to start experiment until after first frame trigger received?
 gd.Experiment.params.delay = 3;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
-gd.Experiment.params.autoNumTrials = true;      % booleon:          automatically updates number of trials when parameters are adjusted
-gd.Experiment.params.numBlocks = 5;             % positive scalar:  specifies default number of blocks to run
 
 % Text user details
 gd.Internal.textUser.number = '7146241885';
@@ -245,7 +243,8 @@ gd.Parameters.stimDur = uicontrol(...
     'String',               gd.Experiment.timing.stimDuration,...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
-    'Position',             [w1+w2,.9,w3,.1]);
+    'Position',             [w1+w2,.9,w3,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % image acq mode
 gd.Parameters.imagingMode = uicontrol(...
     'Style',                'togglebutton',...
@@ -268,7 +267,8 @@ gd.Parameters.ITI = uicontrol(...
     'String',               gd.Experiment.timing.ITI,...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
-    'Position',             [w1+w2,.8,w3,.1]);
+    'Position',             [w1+w2,.8,w3,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % random interval toggle
 gd.Parameters.randomITI = uicontrol(...
     'Style',                'checkbox',...
@@ -420,76 +420,62 @@ gd.Parameters.runSpeed = uicontrol(...
     'Position',             [.5,.2,.5,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Record velocity?','Recording velocity'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
-% auto-update number of trials
-gd.Parameters.autoNumTrials = uicontrol(...
-    'Style',                'checkbox',...
-    'String',               'Auto update # of trials?',...
-    'Value',                gd.Experiment.params.autoNumTrials,...
-    'UserData',             'autoNumTrials',...
-    'Parent',               gd.Parameters.panel,...
-    'Units',                'normalized',...
-    'Position',             [0,.1,w1,.1],...
-    'Callback',             @(hObject,eventdata)DetermineNumTrials(guidata(hObject)));
-% number of blocks
-gd.Parameters.numBlocks = uicontrol(...
-    'Style',                'text',...
-    'String',               '# of blocks',...
-    'HorizontalAlignment',  'right',...
-    'Parent',               gd.Parameters.panel,...
-    'Units',                'normalized',...
-    'Position',             [w1,.1,w2,.1]);
-gd.Parameters.numBlocksInput = uicontrol(...
-    'Style',                'edit',...
-    'String',               gd.Experiment.params.numBlocks,...
-    'Parent',               gd.Parameters.panel,...
-    'Units',                'normalized',...
-    'Position',             [w1+w2,.1,w3,.1],...
-    'Callback',             @(hObject,eventdata)DetermineNumTrials(guidata(hObject)));
 
 % EXPERIMENT
 % number of trials
-gd.Run.numTrialsText = uicontrol(...
+gd.Run.numBlocksText = uicontrol(...
     'Style',                'text',...
-    'String',               '# Trials',...
+    'String',               '# Blocks',...
     'Parent',               gd.Run.panel,...
     'HorizontalAlignment',  'right',...
     'Units',                'normalized',...
-    'Position',             [0,.925,.15,.05]);
-gd.Run.numTrials = uicontrol(...
+    'Position',             [0,.925,.125,.05]);
+gd.Run.numBlocks = uicontrol(...
     'Style',                'edit',...
-    'String',               gd.Experiment.params.numTrials,...
+    'String',               gd.Experiment.params.numBlocks,...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [.15,.9,.15,.1]);
-% estimated time
-gd.Run.estTime = uicontrol(...
-    'Style',                'text',...
-    'String',               'Est time: N/A sec',...
-    'Parent',               gd.Run.panel,...
-    'Units',                'normalized',...
-    'Position',             [0,.85,.3,.05]);
+    'Position',             [.125,.9,.125,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % send text message when complete
 gd.Run.textUser = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Send text?',...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [0,.8,.3,.05],...
+    'Position',             [.25,.9,.25,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Send text?','Sending text'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+% estimated time
+gd.Run.estTime = uicontrol(...
+    'Style',                'text',...
+    'String',               '',...
+    'Parent',               gd.Run.panel,...
+    'Units',                'normalized',...
+    'Position',             [.0,.7,.5,.035]);
 % run button
 gd.Run.run = uicontrol(...
     'Style',                'togglebutton',...
     'String',               'Run?',...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [.3,.8,.7,.2],...
+    'Position',             [0,.75,.5,.15],...
     'Callback',             @(hObject,eventdata)RunExperiment(hObject, eventdata, guidata(hObject)));
+% estimated time
+gd.Run.numTrials = uitable(...
+    'Parent',               gd.Run.panel,...
+    'Units',                'normalized',...
+    'Position',             [.5,.7,.5,.3],...
+    'ColumnName',           {'In','Left','Again','Given'},...
+    'ColumnFormat',         {'char','char','char','char'},...
+    'ColumnEditable',       [true,false,false,false],...
+    'ColumnWidth',          {50,50,50,50},...
+    'CellEditCallback',     @(hObject,eventdata)EditTrials(hObject, eventdata, guidata(hObject)));
 % running speed axes
 gd.Run.runSpeedAxes = axes(...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [.075,.075,.9,.7]);
+    'Position',             [.075,.075,.9,.6]);
 
 guidata(gd.fig, gd); % save guidata
 
@@ -560,7 +546,9 @@ function KeyPressCallback(hObject, eventdata, gd)
 if ismember(eventdata.Key,num2str(1:size(gd.Stimuli.ports.Data,1)))
     Port = str2double(eventdata.Key);
     gd.Stimuli.ports.Data{Port,4} = ~gd.Stimuli.ports.Data{Port,4};
-%     gd.Internal.daq.outputSingleScan([gd.Stimuli.ports.Data{:,4}]);
+    try
+        gd.Internal.daq.outputSingleScan([gd.Stimuli.ports.Data{:,4}]);
+    end
 end
 end
 
@@ -667,7 +655,7 @@ gd.Stimuli.list.Data = cellfun(@num2str, stimuli, 'UniformOutput',false);
 gd.Experiment.stim.pistonCombinations = stimuli;
 
 % Update number of trials
-DetermineNumTrials(gd);
+estimateExpTime(gd);
 
 guidata(hObject, gd);
 
@@ -718,6 +706,7 @@ else
     set(hObject,'String','Add random ITI?','BackgroundColor',[.94,.94,.94]);
     set([gd.Parameters.randomITIText,gd.Parameters.randomITImax],'Enable','off');
 end
+estimateExpTime(gd);
 end
 
 function toggleCatchTrials(hObject, eventdata, gd)
@@ -728,7 +717,7 @@ else
     set(hObject,'String','Catch Trials?','BackgroundColor',[.94,.94,.94]);
     set([gd.Parameters.controlText,gd.Parameters.controlNum],'Enable','off');
 end
-DetermineNumTrials(gd);
+estimateExpTime(gd);
 end
 
 function toggleRepeatBadTrials(hObject, eventdata, gd)
@@ -761,30 +750,31 @@ gd.Experiment.params.frameRateWT = newValue;
 guidata(hObject, gd);
 end
 
-function DetermineNumTrials(gd)
-if ~gd.Parameters.autoNumTrials.Value
-    gd.Parameters.autoNumTrials.String = 'Auto update # of trials?';
-    gd.Parameters.autoNumTrials.BackgroundColor = [.94,.94,.94];
-    return
-else
-    gd.Parameters.autoNumTrials.String = 'Auto upating # of trials';
-    gd.Parameters.autoNumTrials.BackgroundColor = [0,1,0];
-end
+function estimateExpTime(gd)
 numStim = numel(gd.Experiment.stim.pistonCombinations);
-if ~numStim
-    return
-end
-numBlocks = str2double(gd.Parameters.numBlocksInput.String);
+numBlocks = str2double(gd.Run.numBlocks.String);
 if gd.Parameters.control.Value
     numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
 else
     numCatchesPerBlock = 0;
 end
 numTrials = numBlocks*(numStim+numCatchesPerBlock);
-gd.Run.numTrials.String = num2str(numTrials);
+stimDuration = str2double(gd.Parameters.stimDur.String);
+ITI = str2double(gd.Parameters.ITI.String);  
+if gd.Parameters.randomITI.Value
+    randomITImax = str2double(gd.Parameters.randomITImax.String);
+else
+    randomITImax = 0;
+end
+ExpTime = numTrials*(stimDuration+ITI+randomITImax/2);
+gd.Run.estTime.String = sprintf('Est time: %.1f min',ExpTime/60);
 end
 
 %% RUN EXPERIMENT
+function EditTrials(hObject, eventdata, gd)
+disp('a');
+end
+
 function RunExperiment(hObject, eventdata, gd)
 
 if hObject.Value
@@ -929,8 +919,10 @@ if hObject.Value
         
         % Determine stimulus IDs
         Experiment.StimID = 1:numel(Experiment.stim.pistonCombinations);
+        Block = Experiment.StimID';
         if Experiment.params.catchTrials
             Experiment.StimID = [0, Experiment.StimID];
+            Block = [zeros(Experiment.params.numCatchesPerBloc,1); Block];
             Experiment.stim.pistonCombinations = [{[]};Experiment.stim.pistonCombinations];
         end
         numStimuli = numel(Experiment.StimID);
@@ -942,15 +934,15 @@ if hObject.Value
             Experiment.stim.stim(index,ismember(List,Experiment.stim.pistonCombinations{index})) = true;
         end
         
+        %% Populate table
+        gd.Run.numTrials.Data = [numPerBlock*numBlocks,zeros(numStim,3)];
+        
         %% Create triggers
         
         % Compute timing of each trial
         Experiment.timing.trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
         Experiment.timing.numScansPerTrial = ceil(Experiment.params.samplingFrequency * Experiment.timing.trialDuration);
-        
-        % Adjust Callback timing so next trial is queued right after previous trial starts
-        DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
-        
+  
         % Initialize blank triggers
         Experiment.blankTriggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels));
         
@@ -959,6 +951,9 @@ if hObject.Value
         endTrig = Experiment.timing.numScansPerTrial-1;                                              % end on last trigger of trial
         Experiment.PistonTrigger = zeros(Experiment.timing.numScansPerTrial, 1);
         Experiment.PistonTrigger(startTrig:endTrig) = 1;
+        
+        % Adjust Callback timing so next trial is queued right after previous trial starts
+        DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
         
         % Trigger imaging computer on every single trial
         Experiment.blankTriggers([startTrig, endTrig], strcmp(OutChannels, 'O_2PTrigger')) = 1; % trigger at beginning and end of stimulus
@@ -1013,6 +1008,7 @@ if hObject.Value
         numBlock = numel(currentBlockOrder);
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
+        currentNewTrial = 0;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
@@ -1100,9 +1096,6 @@ if hObject.Value
             fclose(H_Scanbox);          % close connection
         end
         
-%         % Reset DAQ
-%         gd = initDAQ(gd);
-        
         % If saving: append stop time, close file, & increment file index
         if saveOut
             save(SaveFile, 'Experiment', '-append');        % update with "Experiment.timing.finish" info
@@ -1111,7 +1104,16 @@ if hObject.Value
             CreateFilename(gd.Saving.FullFilename, [], gd); % update filename for next experiment
         end
         
-        % Reset button properties
+        % Text user
+        if gd.Run.textUser.Value
+            send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('Experiment finished at %s',Experiment.timing.finish(end-7:end)));
+        end
+        
+%         % Reset DAQ
+%         gd = initDAQ(gd);
+
+        % Reset GUI
+        gd.Run.numRemain.String = '';
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
@@ -1119,13 +1121,7 @@ if hObject.Value
         
     catch ME
         warning('Running experiment failed');
-        
-        % Reset button properties
-        hObject.Value = false;
-        hObject.BackgroundColor = [.94,.94,.94];
-        hObject.ForegroundColor = [0,0,0];
-        hObject.String = 'Run';
-        
+ 
         % Close any open connections
         try
             if strcmp(ImagingType, 'sbx')
@@ -1135,8 +1131,20 @@ if hObject.Value
         end
         clear DAQ H_Scanbox
         
+        % Text user
+        if gd.Run.textUser.Value
+            send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'','Experiment failed!');
+        end
+        
 %         % Reset DAQ
 %         gd = initDAQ(gd);
+        
+        % Reset GUI
+        gd.Run.numRemain.String = '';
+        hObject.Value = false;
+        hObject.BackgroundColor = [.94,.94,.94];
+        hObject.ForegroundColor = [0,0,0];
+        hObject.String = 'Run';
         
         % Rethrow error
         rethrow(ME);
@@ -1211,9 +1219,12 @@ end
                 if RepeatBadTrials                                                          % repeate trial
                     fprintf(' (trial to be repeated)');
                     StimuliToRepeat = [StimuliToRepeat, TrialInfo.StimID(RunIndex)];        % add trial to repeat queue
+                else
+                    gd.Run.numRemain.String = sprintf('%d Trial(s) remain',str2double(numTrialsObj.String)-RunIndex);
                 end
             else % mouse was running
                 TrialInfo.Running(RunIndex) = true;                                         % record that trial was good
+                gd.Run.numRemain.String = sprintf('%d Trial(s) remain',numTrials,max(str2double(numTrialsObj.String)-RunIndex,0)+numel(StimuliToRepeat));
             end
             RunIndex = RunIndex+1; % increment index
             
