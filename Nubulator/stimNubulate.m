@@ -1431,5 +1431,6 @@ end
 % column in stimuli table for # per batch
 % # batches updates number of trials for each stimulus
 % estimate time takes into account delay
+% estimate time updates after each trial
 % Run table "RowName" property is StimID rather than 1:N
 % change "Experiment.blankTriggers" to "Experiment.Triggers"
