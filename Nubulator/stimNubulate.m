@@ -37,7 +37,7 @@ gd.Experiment.params.whiskerTracking = false;   % booleon:          send trigger
 gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
 gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle block order each block?
 gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
-gd.Experiment.params.holdStart = false;         % booleon:          wait to start experiment until after first frame trigger received?
+gd.Experiment.params.holdStart = true;          % booleon:          wait to start experiment until after first frame trigger received?
 gd.Experiment.params.delay = 0;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
 
 % Text user details
@@ -1292,7 +1292,7 @@ end
             if TrialInfo.StimID(currentTrial) ~= 0              % current trial is not control trial
                 CurrentTriggers = BaseTriggers;
                 CurrentTriggers(:,PistonCombinations(TrialInfo.StimID(currentTrial),:)) = repmat(PistonTrigger, 1, sum(PistonCombinations(TrialInfo.StimID(currentTrial),:)));
-                if ~MaxRandomScans                              % do not add random ITI
+                if ~MaxRandomScans                                % do not add random ITI
                     DAQ.queueOutputData(CurrentTriggers);       % queue normal stim triggers
                 else
                     TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
@@ -1432,3 +1432,4 @@ end
 % # batches updates number of trials for each stimulus
 % estimate time takes into account delay
 % Run table "RowName" property is StimID rather than 1:N
+% change "Experiment.blankTriggers" to "Experiment.Triggers"
