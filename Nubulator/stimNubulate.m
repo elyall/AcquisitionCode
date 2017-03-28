@@ -37,8 +37,8 @@ gd.Experiment.params.whiskerTracking = false;   % booleon:          send trigger
 gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
 gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle block order each block?
 gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
-gd.Experiment.params.holdStart = true;          % booleon:          wait to start experiment until after first frame trigger received?
-gd.Experiment.params.delay = 3;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
+gd.Experiment.params.holdStart = false;         % booleon:          wait to start experiment until after first frame trigger received?
+gd.Experiment.params.delay = 0;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
 
 % Text user details
 gd.Internal.textUser.number = '7146241885';
@@ -251,6 +251,7 @@ gd.Parameters.imagingMode = uicontrol(...
     'String',               'Constant Imaging',...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
+    'Enable',               'off',... % temporary
     'Position',             [0,.8,w1,.1],...
     'UserData',             {[.94,.94,.94;1,1,1],'Constant Imaging','Trial Imaging'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
@@ -328,7 +329,7 @@ gd.Parameters.repeatBadTrials = uicontrol(...
     'Position',             [0,.5,w1,.1],...
     'Callback',             @(hObject,eventdata)toggleRepeatBadTrials(hObject,eventdata,guidata(hObject)));
 % bad trial mean velocity threshold
-gd.Parameters.goodVelocityThresholdText = uicontrol(...
+gd.Parameters.speedThresholdText = uicontrol(...
     'Style',                'text',...
     'String',               'Threshold (deg/s)',...
     'Parent',               gd.Parameters.panel,...
@@ -336,7 +337,7 @@ gd.Parameters.goodVelocityThresholdText = uicontrol(...
     'Units',                'normalized',...
     'HorizontalAlignment',  'right',...
     'Position',             [w1,.5,w2,.1]);
-gd.Parameters.goodVelocityThreshold = uicontrol(...
+gd.Parameters.speedThreshold = uicontrol(...
     'Style',                'edit',...
     'String',               gd.Experiment.params.speedThreshold,...
     'Parent',               gd.Parameters.panel,...
@@ -727,10 +728,10 @@ end
 function toggleRepeatBadTrials(hObject, eventdata, gd)
 if hObject.Value
     set(hObject,'String','Repeating bad trials','BackgroundColor',[0,1,0]);
-    set([gd.Parameters.goodVelocityThresholdText,gd.Parameters.goodVelocityThreshold],'Enable','on');
+    set([gd.Parameters.speedThresholdText,gd.Parameters.speedThreshold],'Enable','on');
 else
     set(hObject,'String','Repeat bad trials?','BackgroundColor',[.94,.94,.94]);
-    set([gd.Parameters.goodVelocityThresholdText,gd.Parameters.goodVelocityThreshold],'Enable','off');
+    set([gd.Parameters.speedThresholdText,gd.Parameters.speedThreshold],'Enable','off');
 end
 end
 
@@ -1103,9 +1104,9 @@ if hObject.Value
         
         % Scanbox only: stop imaging
         if strcmp(Experiment.imaging.ImagingType, 'sbx')
-            if ~strcmp(ImagingMode,'Trial Imaging')
+%             if ~strcmp(ImagingMode,'Trial Imaging')
                 fprintf(H_Scanbox,'S'); % stop imaging
-            end
+%             end
             fclose(H_Scanbox);          % close connection
         end
         
@@ -1126,7 +1127,6 @@ if hObject.Value
 %         gd = initDAQ(gd);
 
         % Reset GUI
-        gd.Run.numRemain.String = '';
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
@@ -1153,7 +1153,6 @@ if hObject.Value
 %         gd = initDAQ(gd);
         
         % Reset GUI
-        gd.Run.numRemain.String = '';
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
@@ -1247,8 +1246,13 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
-        elseif strcmp(ImagingMode,'Trial Imaging') && any(diff(BufferStim(numBufferScans+1:numBufferScans+numScansBaseline)) == RunIndex) && strcmp(ImagingType,'sbx') % next stimulus starts within window
-            fprintf(H_Scanbox,'G'); % start recording
+            % Trial Imaging mode: stop recording data
+            if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
+                fprintf(H_Scanbox,'G'); % start recording
+            end
+            
+%         elseif strcmp(ImagingMode,'Trial Imaging') && any(diff(BufferStim(numBufferScans+1:numBufferScans+numScansBaseline)) == RunIndex) && strcmp(ImagingType,'sbx') % next stimulus starts within window
+%             fprintf(H_Scanbox,'G'); % start recording
         end %analyze last trial
         
     end %SaveDateIn
@@ -1421,3 +1425,10 @@ if strcmp(mail,'matlabsendtextmessage@gmail.com')
     disp('after the bulky comments.')
 end
 end
+
+
+% button to send stimuli to "Run" below list of stimuli
+% column in stimuli table for # per batch
+% # batches updates number of trials for each stimulus
+% estimate time takes into account delay
+% Run table "RowName" property is StimID rather than 1:N
