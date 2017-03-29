@@ -214,9 +214,9 @@ gd.Stimuli.list = uitable(...
     'Parent',               gd.Stimuli.panel,...
     'Units',                'Normalized',...
     'Position',             [.6,0,.4,1],...
-    'ColumnName',           {'Combination','Delete'},...
-    'ColumnFormat',         {'char','logical'},...
-    'ColumnEditable',       [true,true],...
+    'ColumnName',           {'Combination','# per Block','Delete'},...
+    'ColumnFormat',         {'char','char','logical'},...
+    'ColumnEditable',       [true,true,true],...
     'CellEditCallback',     @(hObject,eventdata)EditStimuli(hObject, eventdata, guidata(hObject)));
 
 % PARAMETERS
@@ -529,18 +529,12 @@ if gd.Experiment.params.holdStart
 end
 
 try
-%     gd = initDAQ(gd);
     gd.Internal.daq = daq.createSession('ni');
     gd.Internal.daq.addDigitalChannel('Dev1', gd.Experiment.stim.setup.Port, 'OutputOnly');
 end
 CreateFilename(gd.Saving.FullFilename, [], gd);
 
 end
-
-% function gd = initDAQ(gd)
-% gd.Internal.daq = daq.createSession('ni');
-% gd.Internal.daq.addDigitalChannel('Dev1', gd.Experiment.stim.setup.Port, 'OutputOnly');
-% end
 
 %% KEYPRESS CALLBACK
 function KeyPressCallback(hObject, eventdata, gd)
@@ -601,69 +595,54 @@ end
 %% STIMULI CALLBACKS
 
 function EditPorts(hObject, eventdata, gd)
-if eventdata.Indices(2)==4 % Trigger port
-%     if isempty(gd.Internal.daq)
-%         gd.Internal.daq = daq.createSession('ni');
-%         gd.Internal.daq.addDigitalChannel('Dev1', gd.Experiment.stim.setup.Port, 'OutputOnly');
-%     end
-try
-    gd.Internal.daq.outputSingleScan([hObject.Data{:,4}]);
+if eventdata.Indices(2)==2      % update DAQ
+    gd.Internal.daq = [];
+    gd.Internal.daq = daq.createSession('ni');
+    gd.Internal.daq.addDigitalChannel('Dev1', hObject.Data(:,2), 'OutputOnly');
+elseif eventdata.Indices(2)==3  % update possible combinations
+    gd.Stimuli.editCombinations.String = num2str(1:nnz([hObject.Data{:,3}]));
+elseif eventdata.Indices(2)==4  % output triggers (single port changed)
+    try
+        gd.Internal.daq.outputSingleScan([hObject.Data{:,4}]);
+    end
 end
-else % Save user changes
-    gd.Experiment.stim.setup = cell2table(hObject.Data(:,1:3),'VariableNames',{'Name','Port','Active'}); % save edits
-    EditCombinations(gd.Stimuli.editCombinations, 'edit', gd);
-end
-
-guidata(hObject,gd); % update guidata
 end
 
 function EditStimuli(hObject, eventdata, gd)
-
-% Delete stimulus
-if eventdata.Indices(2)==2
+if eventdata.Indices(2)==2      % change # of trials per block
+    if ~isnumeric(eventdata.NewData) || round(eventdata.NewData)~=eventdata.NewData || eventdata.NewData<0
+        hObject.Data(eventdata.Indices(1),2) = eventdata.PreviousData;
+    end
+elseif eventdata.Indices(2)==3  % delete stimulus
     hObject.Data(eventdata.Indices(1),:) = [];
 end
-
-% Update registry
-gd.Experiment.stim.pistonCombinations = cellfun(@str2num, hObject.Data(:,1), 'UniformOutput',false);
-guidata(hObject, gd);
-
+estimateExpTime(gd);
 end
 
 function EditCombinations(hObject, eventdata, gd)
-
-if ischar(eventdata) % Update to all possible combinations
-    hObject.String = num2str(1:nnz(gd.Experiment.stim.setup.Active));
-else % Remove not possible combinations
-    combinations = str2num(hObject.String);
-    combinations(combinations > nnz(gd.Experiment.stim.setup.Active)) = [];
-    combinations(combinations < 1) = [];
-    hObject.String = num2str(combinations);
+combinations = str2num(hObject.String);
+combinations(~ismember(combinations,1:nnz([gd.Stimuli.ports.Data{:,3}]))) = []; % remove any pistons that are not active
+if isempty(combinations)
+	combinations = num2str(1:nnz([gd.Stimuli.ports.Data{:,3}]));
 end
-
+hObject.String = num2str(combinations);
 end
 
 function GenerateCombinations(hObject, eventdata, gd)
 
 % Generate combinations
-activePorts = find(gd.Experiment.stim.setup.Active);
+activePorts = find([gd.Stimuli.ports.Data{:,3}]);
 stimuli = [];
 for cindex = str2num(gd.Stimuli.editCombinations.String)
     current = nchoosek(activePorts,cindex);
     stimuli = cat(1,stimuli,mat2cell(current, ones(size(current,1),1), size(current,2)));
 end
+numStimuli = numel(stimuli);
 
 % Display combinations
-gd.Stimuli.list.Data = cellfun(@num2str, stimuli, 'UniformOutput',false);
+gd.Stimuli.list.Data = [cellfun(@num2str, stimuli, 'UniformOutput',false),num2cell(ones(numStimuli,1)),num2cell(false(numStimuli,1))];
 
-% Update registry
-gd.Experiment.stim.pistonCombinations = stimuli;
-
-% Update number of trials
 estimateExpTime(gd);
-
-guidata(hObject, gd);
-
 end
 
 function LoadStimuli(hObject, eventdata, gd)
@@ -674,18 +653,12 @@ if isnumeric(f)
     return
 end
 load(fullfile(p,f), 'stimuli', '-mat');
-fprintf('Loaded stimuli from: %s\n', fullfile(p,f));
+numStimuli = size(stimuli,1);
+fprintf('Loaded %d stimuli from: %s\n', numStimuli, fullfile(p,f));
 
 % Display combinations
-gd.Stimuli.list.Data = cellfun(@num2str, stimuli, 'UniformOutput',false);
-
-% Save loaded stimuli
-gd.Experiment.stim.pistonCombinations = stimuli;
-
-% Update number of trials
-gd.Run.numTrials.String = num2str(size(stimuli,1)*10);
-
-guidata(hObject, gd);
+gd.Stimuli.list.Data = [stimuli,num2cell(false(numStimuli,1))];
+estimateExpTime(gd);
 end
 
 function SaveStimuli(hObject, eventdata, gd)
@@ -696,7 +669,7 @@ if isnumeric(f)
 end
 
 % Save stimuli
-stimuli = gd.Experiment.stim.pistonCombinations;
+stimuli = gd.Stimuli.list.Data(:,1:2);
 save(fullfile(p,f), 'stimuli', '-mat', '-v7.3');
 fprintf('Stimuli saved to: %s\n', fullfile(p,f));
 end
@@ -755,26 +728,6 @@ gd.Experiment.params.frameRateWT = newValue;
 guidata(hObject, gd);
 end
 
-function estimateExpTime(gd)
-numStim = numel(gd.Experiment.stim.pistonCombinations);
-numBlocks = str2double(gd.Run.numBlocks.String);
-if gd.Parameters.control.Value
-    numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
-else
-    numCatchesPerBlock = 0;
-end
-numTrials = numBlocks*(numStim+numCatchesPerBlock);
-stimDuration = str2double(gd.Parameters.stimDur.String);
-ITI = str2double(gd.Parameters.ITI.String);  
-if gd.Parameters.randomITI.Value
-    randomITImax = str2double(gd.Parameters.randomITImax.String);
-else
-    randomITImax = 0;
-end
-ExpTime = numTrials*(stimDuration+ITI+randomITImax/2);
-gd.Run.estTime.String = sprintf('Est time: %.1f min',ExpTime/60);
-end
-
 %% RUN EXPERIMENT
 function EditTrials(hObject, eventdata, gd)
 if ~isnumeric(eventdata.NewData) || round(eventdata.NewData)~=eventdata.NewData || eventdata.NewData<0
@@ -782,17 +735,47 @@ if ~isnumeric(eventdata.NewData) || round(eventdata.NewData)~=eventdata.NewData 
 end
 end
 
+function estimateExpTime(gd)
+
+if isempty(gd.Stimuli.list.Data)
+    return
+end
+
+% Determine number of trials
+numTrialsPerBlock = sum([gd.Stimuli.list.Data{:,2}]);
+if gd.Parameters.control.Value
+    numTrialsPerBlock = numTrialsPerBlock + str2double(gd.Parameters.controlNum.String);
+end
+numBlocks = str2double(gd.Run.numBlocks.String);
+numTrials = numBlocks*numTrialsPerBlock;
+
+% Determine average duration of each trial
+trialDuration = str2double(gd.Parameters.stimDur.String) + str2double(gd.Parameters.ITI.String);  
+if gd.Parameters.randomITI.Value
+    trialDuration = trialDuration + str2double(gd.Parameters.randomITImax.String)/2;
+end
+
+% Calculate and display estimate
+ExpTime = numTrials*trialDuration;
+gd.Run.estTime.String = sprintf('Est time: %.1f min',ExpTime/60);
+end
+
 function RunExperiment(hObject, eventdata, gd)
 
 if hObject.Value
     try
-        if isempty(gd.Experiment.stim.pistonCombinations)
+        if isempty(gd.Stimuli.list.Data)
             error('No stimulus loaded! Please load some stimuli.');
         end
         Experiment = gd.Experiment;
         
         %% Record date & time information
-        gd.Experiment.timing.init = datestr(now);
+        Experiment.timing.init = datestr(now);
+        
+        %% Initialize button
+        hObject.BackgroundColor = [0,0,0];
+        hObject.ForegroundColor = [1,1,1];
+        hObject.String = 'Stop';
         
         %% Determine filenames to save to
         if gd.Saving.save.Value
@@ -813,6 +796,13 @@ if hObject.Value
         end
         
         %% Set parameters
+        Experiment.stim.pistonCombinations = cellfun(@str2num,gd.Stimuli.list.Data(:,1),'UniformOutput',false);
+        Experiment.stim.numPerBlock = gd.Stimuli.list.Data(:,1);
+        
+        Experiment.stim.setup = cell2table(gd.Stimuli.ports.Data(:,1:3),'VariableNames',{'Name','Port','Active'});
+        ActivePistons = unique([Experiment.stim.pistonCombinations{:}]);        % determine active pistons
+        Experiment.stim.setup.Active(1:size(Experiment.stim.setup,1)) = false;
+        Experiment.stim.setup.Active(ActivePistons) = true;                     % set active pistons as active
         
         Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
         Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
@@ -845,8 +835,10 @@ if hObject.Value
         Experiment.params.whiskerTracking = gd.Parameters.whiskerTracking.Value;
         if Experiment.params.whiskerTracking
             Experiment.params.frameRateWT = str2double(gd.Parameters.wtFrameRate.String);
+            Experiment.params.WTtype = gd.Parameters.wtType.String;
         else
             Experiment.params.frameRateWT = false;
+            Experiment.params.WTtype = false;
         end
         
         Experiment.params.blockShuffle = gd.Parameters.shuffle.Value;
@@ -855,11 +847,6 @@ if hObject.Value
         
         Experiment.params.holdStart = gd.Parameters.holdStart.Value;
         Experiment.params.delay = str2double(gd.Parameters.delay.String);
-        
-        %% Initialize button
-        hObject.BackgroundColor = [0,0,0];
-        hObject.ForegroundColor = [1,1,1];
-        hObject.String = 'Stop';
         
         %% Initialize NI-DAQ session
         gd.Internal.daq = [];
@@ -872,9 +859,9 @@ if hObject.Value
         % Add ports
         
         % Pistons
-        [~,PistonDict] = DAQ.addDigitalChannel('Dev1',gd.Experiment.stim.setup.Port(gd.Experiment.stim.setup.Active),'OutputOnly');
+        [~,PistonDict] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port(Experiment.stim.setup.Active),'OutputOnly');
         for index = PistonDict
-            DAQ.Channels(index).Name = strcat('O_Piston_',gd.Experiment.stim.setup.Name{index});
+            DAQ.Channels(index).Name = strcat('O_Piston_',Experiment.stim.setup.Name{index});
         end
         
         % Imaging Computer Trigger (for timing)
@@ -921,8 +908,7 @@ if hObject.Value
         DAQ.NotifyWhenScansQueuedBelow = DAQ.Rate-1; % queue more data when less than a second of data left
         DAQ.addlistener('DataAvailable', @SaveDataIn);  % create listener for when data is returned
         % DAQ.NotifyWhenDataAvailableExceeds = round(DAQ.Rate/100);
-
-
+        
         %% Determine stimuli
         
         % Determine stimulus IDs
@@ -937,7 +923,7 @@ if hObject.Value
         Experiment.stim.stim = false(numStimuli,nnz(Experiment.stim.setup.Active));
         List = find(Experiment.stim.setup.Active);
         for index = 1:numStimuli
-            Experiment.stim.stim(index,ismember(List,Experiment.stim.pistonCombinations{index})) = true;             % used for analysis
+            Experiment.stim.stim(index,ismember(List,Experiment.stim.pistonCombinations{index})) = true;              % used for analysis
         end
         PistonCombinations = false(numStimuli-Experiment.params.catchTrials,numOutChannels);
         for index = 1+Experiment.params.catchTrials:numStimuli
@@ -1426,10 +1412,7 @@ if strcmp(mail,'matlabsendtextmessage@gmail.com')
 end
 end
 
-
-% button to send stimuli to "Run" below list of stimuli
-% column in stimuli table for # per batch
-% # batches updates number of trials for each stimulus
+% Run table is populated properly
 % estimate time takes into account delay
 % estimate time updates after each trial
 % Run table "RowName" property is StimID rather than 1:N
