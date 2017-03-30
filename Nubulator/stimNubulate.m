@@ -467,7 +467,7 @@ gd.Run.numTrials = uitable(...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
     'Position',             [.5,.7,.5,.3],...
-    'ColumnName',           {'In','Good','Bad'},...
+    'ColumnName',           {'Want','Good','Bad','Queued'},...
     'ColumnFormat',         {'char','char','char'},...
     'ColumnEditable',       [true,false,false],...
     'ColumnWidth',          {60,60,60},...
@@ -756,7 +756,8 @@ if gd.Parameters.randomITI.Value
 end
 
 % Calculate and display estimate
-ExpTime = numTrials*trialDuration;
+ExpTime = numTrials*trialDuration+str2double(gd.Parameters.delay.String);
+gd.Run.estTime.UserData = ExpTime;
 gd.Run.estTime.String = sprintf('Est time: %.1f min',ExpTime/60);
 end
 
@@ -802,7 +803,7 @@ if hObject.Value
         Experiment.stim.setup = cell2table(gd.Stimuli.ports.Data(:,1:3),'VariableNames',{'Name','Port','Active'});
         ActivePistons = unique([Experiment.stim.pistonCombinations{:}]);        % determine active pistons
         Experiment.stim.setup.Active(1:size(Experiment.stim.setup,1)) = false;
-        Experiment.stim.setup.Active(ActivePistons) = true;                     % set active pistons as active
+        Experiment.stim.setup.Active(ActivePistons) = true;                     % set requested pistons as active
         
         Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
         Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
@@ -859,8 +860,8 @@ if hObject.Value
         % Add ports
         
         % Pistons
-        [~,PistonDict] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port(Experiment.stim.setup.Active),'OutputOnly');
-        for index = PistonDict
+        [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port(Experiment.stim.setup.Active),'OutputOnly');
+        for index = id
             DAQ.Channels(index).Name = strcat('O_Piston_',Experiment.stim.setup.Name{index});
         end
         
@@ -911,14 +912,19 @@ if hObject.Value
         
         %% Determine stimuli
         
-        % Determine stimulus IDs
+        % Determine stimulus IDs & fill out trial table
         Experiment.StimID = 1:numel(Experiment.stim.pistonCombinations);
-        if Experiment.params.catchTrials
+        if ~Experiment.params.catchTrials
+            numStimuli = numel(Experiment.StimID);
+            gd.Run.numTrials.Data = [cat(1,gd.Stimuli.list.Data{:,2}),zeros(numStimuli,3)];
+        else
             Experiment.StimID = [0, Experiment.StimID];
             Experiment.stim.pistonCombinations = [{[]};Experiment.stim.pistonCombinations];
+            numStimuli = numel(Experiment.StimID);
+            gd.Run.numTrials.Data = [[Experiment.params.numCatchesPerBlock;cat(1,gd.Stimuli.list.Data{:,2})],zeros(numStimuli,3)];
         end
-        numStimuli = numel(Experiment.StimID);
-
+        gd.Run.numTrials.RowName = Experiment.StimID;
+        
         % Create stim matrix
         Experiment.stim.stim = false(numStimuli,nnz(Experiment.stim.setup.Active));
         List = find(Experiment.stim.setup.Active);
@@ -926,14 +932,9 @@ if hObject.Value
             Experiment.stim.stim(index,ismember(List,Experiment.stim.pistonCombinations{index})) = true;              % used for analysis
         end
         PistonCombinations = false(numStimuli-Experiment.params.catchTrials,numOutChannels);
+        PistonDict = find(~cellfun(@isempty,strfind({DAQ.Channels(:).Name},'Piston')));
         for index = 1+Experiment.params.catchTrials:numStimuli
             PistonCombinations(index-Experiment.params.catchTrials,PistonDict(Experiment.stim.stim(index,:))) = true; % used for queueing
-        end
-        
-        % Populate table
-        gd.Run.numTrials.Data = [ones(numStimuli,1)*str2double(gd.Run.numBlocks.String),zeros(numStimuli,2)];
-        if Experiment.params.catchTrials
-            gd.Run.numTrials.Data(1,1) = Experiment.params.numCatchesPerBlock*gd.Run.numTrials.Data(1,1);
         end
         
         %% Create triggers
@@ -943,7 +944,7 @@ if hObject.Value
         Experiment.timing.numScansPerTrial = ceil(Experiment.params.samplingFrequency * Experiment.timing.trialDuration);
   
         % Initialize blank triggers
-        Experiment.blankTriggers = zeros(Experiment.timing.numScansPerTrial, numOutChannels);
+        Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numOutChannels);
         
         % Trigger pistons
         startTrig = max(floor(Experiment.params.samplingFrequency * Experiment.timing.ITI),1);    % start after ITI
@@ -955,7 +956,7 @@ if hObject.Value
         DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
         
         % Trigger imaging computer on every single trial
-        Experiment.blankTriggers([startTrig, endTrig], strcmp(OutChannels, 'O_2PTrigger')) = 1; % trigger at beginning and end of stimulus
+        Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels, 'O_2PTrigger')) = 1; % trigger at beginning and end of stimulus
         
         % Trigger whisker tracking camera on every single trial
         if Experiment.params.whiskerTracking
@@ -977,7 +978,7 @@ if hObject.Value
         end
         
         % Build up vector to display when stimulus is present
-        Experiment.Stimulus = zeros(size(Experiment.blankTriggers,1), 1);
+        Experiment.Stimulus = zeros(size(Experiment.Triggers,1), 1);
         Experiment.Stimulus(startTrig:endTrig) = 1;
         
         
@@ -1000,28 +1001,31 @@ if hObject.Value
         
         % Necessary variables
         numTrialsObj = gd.Run.numTrials;
-        numTrialsRemain = sum(numTrialsObj.Data(:,1));
         StimIDs = Experiment.StimID;
         ImagingType = Experiment.imaging.ImagingType;
         ImagingMode = Experiment.imaging.ImagingMode;
-        numScansBaseline = Experiment.params.samplingFrequency * Experiment.timing.ITI;
         Block = [];
-        BlockShuffle = Experiment.params.blockShuffle;
-        currentTrial = 0;
         blockIndex = 0;
         numBlock = 0;
+        BlockShuffle = Experiment.params.blockShuffle;
+        currentTrial = 0;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
         
+        % Estimating time remaining
+        timeObj = gd.Run.estTime;
+        trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
+        
         % Stim dependent variables
         % PistonCombinations = Experiment.stim.pistonCombinations;
-        BaseTriggers = Experiment.blankTriggers;
+        BaseTriggers = Experiment.Triggers;
         PistonTrigger = Experiment.PistonTrigger;
         
         % If adding random ITI
         if Experiment.params.randomITI
             MaxRandomScans = floor(Experiment.timing.randomITImax*Experiment.params.samplingFrequency);
+            trialDuration = trialDuration + Experiment.timing.randomITImax/2;
         else
             MaxRandomScans = 0;
         end
@@ -1168,8 +1172,13 @@ end
         % If experiment hasn't started, determine whether to start experiment
         if ~Started                                       % experiment hasn't started
             if DelayTimer                                   % delay timer started previously 
-                if toc(DelayTimer)>=Delay                       % requested delay time has been reached
+                currentTime = toc(DelayTimer);
+                if currentTime>=Delay                           % requested delay time has been reached
                     Started = true;                               	% start experiment
+                    timeObj.UserData = timeObj.UserData - Delay;
+                    timeObj.String = sprintf('Est time: %.1f min',timeObj.UserData/60);
+                else
+                    timeObj.String = sprintf('Est time: %.1f min',(timeObj.UserData-currentTime)/60);
                 end
             elseif any(eventdata.Data(:,FrameChannelIndex)) % first frame trigger received
                 if Delay                                    % delay requested
@@ -1192,7 +1201,7 @@ end
         x_t = padarray(x_t, sw_len, 'replicate');   % pad for convolution
         dx_dt = conv(x_t, d_smooth_win, 'same');    % perform convolution
         dx_dt([1:sw_len,end-sw_len+1:end]) = [];    % remove values produced by padding the data
-        % dx_dt = dx_dt * 360/360;                  % convert to degrees (360 pulses per 360 degrees)
+        % dx_dt = dx_dt * 360/360;                  % convert to degrees (no need since 360 pulses per 360 degrees)
         
         % Display new data and stimulus info
         currentStim = downsample(BufferStim(1:numBufferScans), dsamp);
@@ -1201,7 +1210,8 @@ end
         
         % Record average running speed during stimulus period
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
-            
+            numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,4) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,4) - 1; % update # queued for given stimulus
+
             % Trial Imaging mode: stop recording data
             if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
                 fprintf(H_Scanbox,'S'); % stop recording
@@ -1212,19 +1222,22 @@ end
             fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex)); % display running speed
             
             % Determine if mouse was running during previous trial
-            if TrialInfo.RunSpeed(RunIndex) < SpeedThreshold
-                TrialInfo.Running(RunIndex) = false;                                        % record that trial was bad
-                if RepeatBadTrials                                                          % repeate trial
-                    fprintf(' (trial to be repeated)');
-                    numTrialsRemain = numTrialsRemain + 1;
-                    numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) + 1;
-                else
-                    numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) + 1;
-                end
-            else % mouse was running
-                TrialInfo.Running(RunIndex) = true;                                         % record that trial was good
-                numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) + 1;
+            if TrialInfo.RunSpeed(RunIndex) < SpeedThreshold % mouse wasn't running
+                TrialInfo.Running(RunIndex) = false;         % record trial was bad
+            else                                             % mouse was running
+                TrialInfo.Running(RunIndex) = true;          % record trial was good
             end
+            
+            % Determine if trial should be repeated or accepted
+            if RepeatBadTrials && ~TrialInfo.Running(RunIndex)  % repeat trial
+                fprintf(' (trial to be repeated)');
+                numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) + 1; % increment bad column
+            else
+                numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) + 1; % increment good column
+                timeObj.UserData = timeObj.UserData - trialDuration;
+                timeObj.String = sprintf('Est time: %.1f min',timeObj.UserData/60);
+            end
+            
             RunIndex = RunIndex+1; % increment index
             
             % Save to file
@@ -1232,7 +1245,7 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
-            % Trial Imaging mode: stop recording data
+            % Trial Imaging mode: start recording data
             if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
                 fprintf(H_Scanbox,'G'); % start recording
             end
@@ -1245,62 +1258,53 @@ end
 
 %% Callback: QueueOutputData
     function QueueData(src,eventdata)
+        numTrialsRemain = numTrialsObj.Data(:,1) - sum(numTrialsObj.Data(:,[2,4]),2);
+        numTrialsRemain(numTrialsRemain<0) = 0; % fix in case user changed request to less than good trials already given
         
         % Queue next trial
         if ~Started % imaging system hasn't started yet, queue one "blank" trial
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numOutChannels));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
             
-        elseif  hObject.Value && numTrialsRemain % user hasn't quit, and experiment hasn't finished
+        elseif hObject.Value && any(numTrialsRemain) % user hasn't quit, and experiment hasn't finished
             
             % Update indices
             currentTrial = currentTrial + 1;
-            numTrialsRemain = numTrialsRemain - 1;
             blockIndex = blockIndex + 1;
             ExperimentReachedEnd = false;
             
             % Create block if new block
             if blockIndex > numBlock
-                Rate = diff(numTrialsObj.Data(:,[2,1]),[],2);
-                Rate = round(Rate/min(Rate(logical(Rate))));
-                Block = repelem(StimIDs,Rate);
+                numTrialsRemain = round(numTrialsRemain/min(numTrialsRemain(logical(numTrialsRemain))));
+                Block = repelem(StimIDs,numTrialsRemain);
                 numBlock = numel(Block);
                 blockIndex = 1;
                 if BlockShuffle
-                    Block = Block(randperm(numBlock));      % shuffle block
+                    Block = Block(randperm(numBlock)); % shuffle block
                 end
             end
             
             % Determine StimID of stimulus to queue
             TrialInfo.StimID(currentTrial) = Block(blockIndex);
             
-            % Queue triggers
-            if TrialInfo.StimID(currentTrial) ~= 0              % current trial is not control trial
-                CurrentTriggers = BaseTriggers;
+            % Create triggers
+            CurrentTriggers = BaseTriggers;
+            if TrialInfo.StimID(currentTrial) ~= 0 % current trial is not control trial
                 CurrentTriggers(:,PistonCombinations(TrialInfo.StimID(currentTrial),:)) = repmat(PistonTrigger, 1, sum(PistonCombinations(TrialInfo.StimID(currentTrial),:)));
-                if ~MaxRandomScans                                % do not add random ITI
-                    DAQ.queueOutputData(CurrentTriggers);       % queue normal stim triggers
-                else
-                    TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
-                    DAQ.queueOutputData(cat(1,CurrentTriggers,zeros(TrialInfo.numRandomScansPost(currentTrial),numOutChannels))); % queue normal stim triggers with extra scans
-                end
-            else                                                % current trial is control trial
-                if ~MaxRandomScans                              % do not add random ITI
-                    DAQ.queueOutputData(BaseTriggers);          % queue control triggers
-                else
-                    TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
-                    DAQ.queueOutputData(cat(1,BaseTriggers,zeros(TrialInfo.numRandomScansPost(currentTrial),numOutChannels))); % queue normal control triggers with extra scans
-                end
             end
             
-            % Update buffer
-            if ~MaxRandomScans
-                BufferStim = cat(1, BufferStim, Stimulus*currentTrial);
+            % Queue triggers & update buffer
+            if ~MaxRandomScans                                          % do not add random ITI
+                DAQ.queueOutputData(CurrentTriggers);                   % queue triggers
+                BufferStim = cat(1, BufferStim, Stimulus*currentTrial); % update buffer
             else
-                BufferStim = cat(1, BufferStim, Stimulus*currentTrial, zeros(TrialInfo.numRandomScansPost(currentTrial),1));
+                TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]);                                       % determine amount of extra scans to add
+                DAQ.queueOutputData(cat(1,CurrentTriggers,zeros(TrialInfo.numRandomScansPost(currentTrial),numOutChannels))); % queue triggers with extra scans
+                BufferStim = cat(1, BufferStim, Stimulus*currentTrial, zeros(TrialInfo.numRandomScansPost(currentTrial),1));  % update buffer
             end
             
             % Update information
+            numTrialsObj.Data(TrialInfo.StimID(currentTrial)==StimIDs,4) = numTrialsObj.Data(TrialInfo.StimID(currentTrial)==StimIDs,4) + 1;
             fprintf('\nQueued trial %d: stimulus %d', currentTrial, TrialInfo.StimID(currentTrial));
             if saveOut
                 save(SaveFile, 'TrialInfo', '-append');
@@ -1412,8 +1416,3 @@ if strcmp(mail,'matlabsendtextmessage@gmail.com')
 end
 end
 
-% Run table is populated properly
-% estimate time takes into account delay
-% estimate time updates after each trial
-% Run table "RowName" property is StimID rather than 1:N
-% change "Experiment.blankTriggers" to "Experiment.Triggers"
