@@ -31,7 +31,7 @@ gd.Experiment.params.numBlocks = 5;             % positive integer: default # of
 gd.Experiment.params.randomITI = false;         % booleon:          add on random time to ITI?
 gd.Experiment.params.catchTrials = true;        % booleon:          give control stimulus?
 gd.Experiment.params.numCatchesPerBlock = 1;    % positive integer: default # of catch trials to present per block
-gd.Experiment.params.repeatBadTrials = false;   % booleon:          repeat non-running trials
+gd.Experiment.params.repeatBadTrials = true;    % booleon:          repeat non-running trials
 gd.Experiment.params.speedThreshold = 100;      % positive scalar:  velocity threshold for good running trials (deg/s)
 gd.Experiment.params.whiskerTracking = false;   % booleon:          send triggers for whisker tracking camera?
 gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
@@ -401,7 +401,8 @@ gd.Parameters.delay = uicontrol(...
     'String',               gd.Experiment.params.delay,...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
-    'Position',             [w1+w2,.3,w3,.1]);
+    'Position',             [w1+w2,.3,w3,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % block shuffle toggle
 gd.Parameters.shuffle = uicontrol(...
     'Style',                'checkbox',...
@@ -1049,6 +1050,7 @@ if hObject.Value
         RunChannelIndices = [find(strcmp(InChannels, 'I_RunWheelB')),find(strcmp(InChannels,'I_RunWheelA'))];
         numBufferScans = gd.Internal.buffer.numTrials*Experiment.timing.numScansPerTrial;
         DataInBuffer = zeros(numBufferScans, 2);
+        RunBuffer = zeros(ceil(numBufferScans/dsamp), 1);
         dsamp = gd.Internal.buffer.downSample;
         dsamp_Fs = Experiment.params.samplingFrequency / dsamp;
         smooth_win = gausswin(dsamp_Fs, 23.5/2);
@@ -1059,6 +1061,7 @@ if hObject.Value
         
         % Variables for displaying stim info
         numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
+        numRunScansReturned = floor(DAQ.NotifyWhenDataAvailableExceeds/dsamp);
         BufferStim = zeros(numBufferScans, 1);
         
         % Variables for determing if mouse was running
@@ -1112,11 +1115,9 @@ if hObject.Value
         if gd.Run.textUser.Value
             send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('Experiment finished at %s',Experiment.timing.finish(end-7:end)));
         end
-        
-%         % Reset DAQ
-%         gd = initDAQ(gd);
 
         % Reset GUI
+        gd.Run.numTrials.Data = [];
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
@@ -1138,11 +1139,9 @@ if hObject.Value
         if gd.Run.textUser.Value
             send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'','Experiment failed!');
         end
-        
-%         % Reset DAQ
-%         gd = initDAQ(gd);
-        
+          
         % Reset GUI
+        gd.Run.numTrials.Data = [];
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
@@ -1207,6 +1206,21 @@ end
         currentStim = downsample(BufferStim(1:numBufferScans), dsamp);
         plot(hAxes, numBufferScans:-dsamp:1, dx_dt, 'b-', numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');
         ylim([-100,600]);
+        
+%         % Convert new data to run speed
+%         Data = [0;diff(DataInBuffer(end-numScansReturned-sw_len*dsamp+1:end,1))>0];       % gather pulses' front edges
+%         Data(all([Data,DataInBuffer(end-numScansReturned-sw_len*dsamp+1:end,2)],2)) = -1; % set backwards steps to be backwards
+%         Data = cumsum(Data);                                                        % convert pulses to counter data
+%         x_t = downsample(Data, dsamp);                                              % downsample data to speed up computation
+%         x_t = padarray(x_t, sw_len, 'replicate', 'post');                           % pad for convolution
+%         dx_dt = conv(x_t, d_smooth_win, 'same');                                    % perform convolution
+%         % dx_dt = dx_dt * 360/360;                                                  % convert to degrees (no need since 360 pulses per 360 degrees)
+%         RunBuffer = cat(1, RunBuffer(numRunScansReturned+1:end,:), dx_dt(sw_len+1:end-sw_len));
+%         
+%         % Display new data and stimulus info
+%         currentStim = downsample(BufferStim(1:numBufferScans), dsamp);
+%         plot(hAxes, numBufferScans:-dsamp:1, RunBuffer, 'b-', numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');
+%         ylim([-100,600]);
         
         % Record average running speed during stimulus period
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
