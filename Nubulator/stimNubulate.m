@@ -1050,18 +1050,18 @@ if hObject.Value
         RunChannelIndices = [find(strcmp(InChannels, 'I_RunWheelB')),find(strcmp(InChannels,'I_RunWheelA'))];
         numBufferScans = gd.Internal.buffer.numTrials*Experiment.timing.numScansPerTrial;
         DataInBuffer = zeros(numBufferScans, 2);
-        RunBuffer = zeros(ceil(numBufferScans/dsamp), 1);
         dsamp = gd.Internal.buffer.downSample;
         dsamp_Fs = Experiment.params.samplingFrequency / dsamp;
         smooth_win = gausswin(dsamp_Fs, 23.5/2);
         smooth_win = smooth_win/sum(smooth_win);
         sw_len = length(smooth_win);
         d_smooth_win = [0;diff(smooth_win)]/(1/dsamp_Fs);
+%         RunBuffer = zeros(ceil(numBufferScans/dsamp), 1);
         hAxes = gd.Run.runSpeedAxes;
         
         % Variables for displaying stim info
         numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
-        numRunScansReturned = floor(DAQ.NotifyWhenDataAvailableExceeds/dsamp);
+%         numRunScansReturned = floor(DAQ.NotifyWhenDataAvailableExceeds/dsamp);
         BufferStim = zeros(numBufferScans, 1);
         
         % Variables for determing if mouse was running
