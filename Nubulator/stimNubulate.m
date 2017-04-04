@@ -293,7 +293,8 @@ gd.Parameters.randomITImax = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'Enable',               'off',...
-    'Position',             [w1+w2,.7,w3,.1]);
+    'Position',             [w1+w2,.7,w3,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % catch trial toggle
 gd.Parameters.control = uicontrol(...
     'Style',                'checkbox',...
@@ -318,7 +319,7 @@ gd.Parameters.controlNum = uicontrol(...
     'Enable',               'off',...
     'Units',                'normalized',...
     'Position',             [w1+w2,.6,w3,.1],...
-    'Callback',             @(hObject,eventdata)DetermineNumTrials(guidata(hObject)));
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % repeat bad trials toggle
 gd.Parameters.repeatBadTrials = uicontrol(...
     'Style',                'checkbox',...
@@ -917,12 +918,12 @@ if hObject.Value
         Experiment.StimID = 1:numel(Experiment.stim.pistonCombinations);
         if ~Experiment.params.catchTrials
             numStimuli = numel(Experiment.StimID);
-            gd.Run.numTrials.Data = [cat(1,gd.Stimuli.list.Data{:,2}),zeros(numStimuli,3)];
+            gd.Run.numTrials.Data = [cat(1,gd.Stimuli.list.Data{:,2})*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
         else
             Experiment.StimID = [0, Experiment.StimID];
             Experiment.stim.pistonCombinations = [{[]};Experiment.stim.pistonCombinations];
             numStimuli = numel(Experiment.StimID);
-            gd.Run.numTrials.Data = [[Experiment.params.numCatchesPerBlock;cat(1,gd.Stimuli.list.Data{:,2})],zeros(numStimuli,3)];
+            gd.Run.numTrials.Data = [[Experiment.params.numCatchesPerBlock;cat(1,gd.Stimuli.list.Data{:,2})]*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
         end
         gd.Run.numTrials.RowName = Experiment.StimID;
         
@@ -1117,7 +1118,7 @@ if hObject.Value
         end
 
         % Reset GUI
-        gd.Run.numTrials.Data = [];
+        estimateExpTime(gd);
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
@@ -1141,7 +1142,7 @@ if hObject.Value
         end
           
         % Reset GUI
-        gd.Run.numTrials.Data = [];
+        estimateExpTime(gd);
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
