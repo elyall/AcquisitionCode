@@ -27,7 +27,7 @@ gd.Experiment.timing.ITI = 4.5;             % in seconds
 gd.Experiment.timing.randomITImax = 2;      % in seconds
 
 gd.Experiment.params.samplingFrequency = 30000;
-gd.Experiment.params.numTrials = 5;             % positive integer: default # of trials to present
+gd.Experiment.params.numBlocks = 5;             % positive integer: default # of blocks to present
 gd.Experiment.params.randomITI = false;         % booleon:          add on random time to ITI?
 gd.Experiment.params.catchTrials = true;        % booleon:          give control stimulus?
 gd.Experiment.params.numCatchesPerBlock = 1;    % positive integer: default # of catch trials to present per block
@@ -49,7 +49,7 @@ gd.Internal.buffer.numTrials = 2;           %4*gd.Experiment.params.samplingFreq
 gd.Internal.buffer.downSample = 30;
 
 % Stim dependent variables
-gd.Experiment.params.angleMove = 30;        % positive scalar:  default angle for stepper motor to move each trial
+gd.Experiment.stim.angleMove = 30;          % positive scalar:  default angle for stepper motor to move each trial
 gd.Internal.LinearStage.APport = 'com3';    % string:           specifies port
 gd.Internal.LinearStage.MLport = 'com4';    % string:           specifies port
 
@@ -185,7 +185,7 @@ gd.Controls.stepCCW = uicontrol(...
 % stepper motor degrees
 gd.Controls.stepAngle = uicontrol(...
     'Style',                'edit',...
-    'String',               gd.Experiment.params.angleMove,...
+    'String',               gd.Experiment.stim.angleMove,...
     'Parent',               gd.Controls.panel,...
     'Units',                'normalized',...
     'Position',             [.35,.75,.3,.1]);
@@ -267,9 +267,9 @@ gd.Stimuli.list = uitable(...
     'Parent',               gd.Stimuli.panel,...
     'Units',                'Normalized',...
     'Position',             [0,0,.6,.7],...
-    'ColumnName',           {'AP Pos','ML Pos','Delete'},...
-    'ColumnFormat',         {'numeric','numeric','logical'},...
-    'ColumnEditable',       [true,true,true],...
+    'ColumnName',           {'AP Pos','ML Pos','# per Block','Delete'},...
+    'ColumnFormat',         {'numeric','numeric','numeric','logical'},...
+    'ColumnEditable',       [true,true,true,true],...
     'ColumnWidth',          {72,72,50},...
     'CellEditCallback',     @(hObject,eventdata)EditStimuli(hObject, eventdata, guidata(hObject)));
 % choose type
@@ -550,42 +550,60 @@ gd.Parameters.runSpeed = uicontrol(...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 
 % EXPERIMENT
-% number of trials
-gd.Run.numTrialsText = uicontrol(...
+% number of blocks
+gd.Run.numBlocksText = uicontrol(...
     'Style',                'text',...
-    'String',               '# Trials',...
+    'String',               '# Blocks',...
     'Parent',               gd.Run.panel,...
     'HorizontalAlignment',  'right',...
     'Units',                'normalized',...
-    'Position',             [0,.925,.15,.05]);
-gd.Run.numTrials = uicontrol(...
+    'Position',             [0,.925,.125,.05]);
+gd.Run.numBlocks = uicontrol(...
     'Style',                'edit',...
-    'String',               gd.Experiment.params.numTrials,...
+    'String',               gd.Experiment.params.numBlocks,...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [.15,.9,.15,.1]);
+    'Position',             [.125,.9,.125,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % send text message when complete
 gd.Run.textUser = uicontrol(...
     'Style',                'checkbox',...
     'String',               'Send text?',...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [0,.8,.3,.1],...
+    'Position',             [.25,.9,.25,.1],...
     'UserData',             {[.94,.94,.94;0,1,0],'Send text?','Sending text'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
+% estimated time
+gd.Run.estTime = uicontrol(...
+    'Style',                'text',...
+    'String',               '',...
+    'Parent',               gd.Run.panel,...
+    'Units',                'normalized',...
+    'Position',             [.0,.7,.5,.035]);
 % run button
 gd.Run.run = uicontrol(...
     'Style',                'togglebutton',...
     'String',               'Run?',...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [.3,.8,.7,.2],...
+    'Position',             [0,.75,.5,.15],...
     'Callback',             @(hObject,eventdata)RunExperiment(hObject, eventdata, guidata(hObject)));
+% estimated time
+gd.Run.numTrials = uitable(...
+    'Parent',               gd.Run.panel,...
+    'Units',                'normalized',...
+    'Position',             [.5,.7,.5,.3],...
+    'ColumnName',           {'Want','Good','Bad','Queued'},...
+    'ColumnFormat',         {'char','char','char'},...
+    'ColumnEditable',       [true,false,false],...
+    'ColumnWidth',          {60,60,60},...
+    'CellEditCallback',     @(hObject,eventdata)EditTrials(hObject, eventdata, guidata(hObject)));
 % running speed axes
 gd.Run.runSpeedAxes = axes(...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
-    'Position',             [.075,.075,.9,.7]);
+    'Position',             [.075,.075,.9,.6]);
 
 guidata(gd.fig, gd); % save guidata
 
@@ -727,36 +745,29 @@ end
 
 %% STIMULI CALLBACKS
 function LoadStimuli(hObject, eventdata, gd)
-% Select and load file
-[f,p] = uigetfile({'*.stim';'*.mat'},'Select stim file to load',cd);
+[f,p] = uigetfile({'*.stim';'*.mat'},'Select stim file to load',cd); % select file to load
 if isnumeric(f)
-    return
+    return % user hit cancel
 end
-load(fullfile(p,f), 'stimuli', '-mat');
-fprintf('Loaded stimuli from: %s\n', fullfile(p,f));
-
-% Load stimuli
-gd.Stimuli.list.Data = num2cell(stimuli); % display stimuli
-gd.Experiment.Position = stimuli;         % save loaded stimuli
-guidata(hObject, gd);
+load(fullfile(p,f), 'stimuli', '-mat');               % load stimuli
+gd.Stimuli.list.Data = num2cell(stimuli);             % display stimuli
+set([gd.Stimuli.save,gd.Stimuli.view],'Enable','on'); % update GUI
+fprintf('Loaded stimuli from: %s\n', fullfile(p,f));  % inform user
 end
 
 function SaveStimuli(hObject, eventdata, gd)
-% Determine file to save to
-[f,p] = uiputfile({'*.stim';'*.mat'},'Save stimuli as?',cd);
+[f,p] = uiputfile({'*.stim';'*.mat'},'Save stimuli as?',cd); % determine file to save to
 if isnumeric(f)
-    return
+    return % user hit cancel
 end
-saveFile = fullfile(p,f);
-
-% Save stimuli
-stimuli = gd.Experiment.Position;
-if ~exist(saveFile,'file')
-    save(fullfile(p,f), 'stimuli', '-mat', '-v7.3');
+saveFile = fullfile(p,f);               % determine filename
+stimuli = gd.Stimuli.list.Data(:,1:3);  % gather stimuli
+if ~exist(saveFile,'file')              % save stimuli
+    save(saveFile, 'stimuli', '-mat', '-v7.3');
 else
-    save(fullfile(p,f), 'stimuli', '-mat', '-append');
+    save(saveFile, 'stimuli', '-mat', '-append');
 end
-fprintf('Stimuli saved to: %s\n', fullfile(p,f));
+fprintf('Stimuli saved to: %s\n', saveFile); % inform user
 end
 
 function EditStimInputs(hObject, eventdata, gd)
@@ -791,10 +802,11 @@ toggle = [gd.Stimuli.positionTable.Data{:,1}];
 if ~any(toggle)
     error('Need at least one active axis!');
 end
+hObject.String = 'Generating...'; drawnow;
 stimParams = cell2mat(gd.Stimuli.positionTable.Data(:,2:end));
 
 % Determine # of samples
-numSamples = str2num(gd.Stimuli.numSamples.String);
+numSamples = str2double(gd.Stimuli.numSamples.String);
 if isempty(numSamples)
     numSamples = 0;
 end
@@ -816,26 +828,20 @@ end
 out = nan(size(stimuli,1),numel(toggle));
 out(:,toggle) = stimuli;
 
-gd.Experiment.Position = out; % Update registry
-guidata(hObject, gd);
-gd.Stimuli.list.Data = out; % display stimuli
-gd.Stimuli.view.Enable = 'on';
+gd.Stimuli.list.Data = [out,ones(size(out,1),1)]; % display stimuli
+set([gd.Stimuli.save,gd.Stimuli.view],'Enable','on');
+hObject.String = 'Generate Stimuli';
 end
 
 function ViewStimuli(hObject, eventdata, gd)
-stimuli = gd.Experiment.Position;
-if any(isnan(stimuli(:)))
-    stimuli(:,any(isnan(stimuli),1))=[];
-    numDims = 1;
-else
-    numDims=2;
-end
+stimuli = gd.Stimuli.list.Data(:,1:2);
+stimuli(:,all(isnan(stimuli),1))=[]; % remove unused axis if any exist
 nbins = 20;
 figure;
-if numDims == 1
+if size(stimuli,2) == 1
     subplot(1,2,1); plot(zeros(size(stimuli,1),1),stimuli,'k.'); ylabel('Value');
     subplot(1,2,2); histogram(stimuli,nbins); xlabel('Position'); ylabel('count');
-elseif numDims == 2
+else
     subplot(1,3,1); plot(stimuli(:,2),stimuli(:,1),'k.'); xlabel('ML'); ylabel('AP');
     subplot(1,3,2); histogram(stimuli(:,2),nbins); xlabel('ML Position'); ylabel('count'); 
     subplot(1,3,3); histogram(stimuli(:,1),nbins); xlabel('AP Position'); ylabel('count'); 
@@ -843,9 +849,11 @@ end
 end
 
 function EditStimuli(hObject, eventdata, gd)
-if eventdata.Indices(2)==3
-    gd.Experiment.Position(eventdata.Indices(1),:) = []; % remove stimulus
-    guidata(hObject, gd);
+if eventdata.Indices(2)==3      % change # of trials per block
+    if ~isnumeric(eventdata.NewData) || round(eventdata.NewData)~=eventdata.NewData || eventdata.NewData<0
+        hObject.Data(eventdata.Indices(1),2) = eventdata.PreviousData;
+    end
+elseif eventdata.Indices(2)==4  % remove stimulus
     hObject.Data(eventdata.Indices(1),:) = []; % update display
 end
 end
@@ -920,7 +928,6 @@ if hObject.Value
         %% Determine filenames to save to
         if gd.Saving.save.Value
             saveOut = true;
-            % mat file
             if exist(Experiment.saving.SaveFile, 'file')
                 answer = questdlg(sprintf('File already exists! Continue?\n%s', Experiment.saving.SaveFile), 'Overwrite file?', 'Yes', 'No', 'No');
                 if strcmp(answer, 'No')
@@ -929,14 +936,22 @@ if hObject.Value
                 end
             end
             SaveFile = Experiment.saving.SaveFile;
-            % bin file
-            Experiment.saving.DataFile = strcat(Experiment.saving.SaveFile(1:end-4), '.bin');
+            Experiment.saving.DataFile = strcat(Experiment.saving.SaveFile(1:end-4), '.bin'); % bin file
         else
             saveOut = false;
         end
         
+        %% Initialize button
+        hObject.BackgroundColor = [0,0,0];
+        hObject.ForegroundColor = [1,1,1];
+        hObject.String = 'Stop';
+        
         %% Set parameters
         
+        Experiment.Position = gd.Stimuli.list.Data(:,1:2);
+        Experiment.stim.angleMove = str2double(gd.Controls.stepAngle.String);
+        Experiment.stim.numPerBlock = cell2mat(gd.Stimuli.list.Data(:,2));
+
         Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
         Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
         
@@ -968,8 +983,10 @@ if hObject.Value
         Experiment.params.whiskerTracking = gd.Parameters.whiskerTracking.Value;
         if Experiment.params.whiskerTracking
             Experiment.params.frameRateWT = str2double(gd.Parameters.wtFrameRate.String);
+            Experiment.params.WTtype = gd.Parameters.wtType.String;
         else
             Experiment.params.frameRateWT = false;
+            Experiment.params.WTtype = false;
         end
         
         Experiment.params.blockShuffle = gd.Parameters.shuffle.Value;
@@ -978,14 +995,6 @@ if hObject.Value
         
         Experiment.params.holdStart = gd.Parameters.holdStart.Value;
         Experiment.params.delay = str2double(gd.Parameters.delay.String);
-        
-        % Stim specific
-        Experiment.params.angleMove = str2double(gd.Controls.stepAngle.String);
-
-        %% Initialize button
-        hObject.BackgroundColor = [0,0,0];
-        hObject.ForegroundColor = [1,1,1];
-        hObject.String = 'Stop';
         
         %% Initialize NI-DAQ session
         gd.Internal.daq = [];
@@ -997,17 +1006,17 @@ if hObject.Value
         
         % Add ports
         
-        % Imaging Computer Trigger (for timing)
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
-        DAQ.Channels(id).Name = 'O_2PTrigger';
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
-        DAQ.Channels(id).Name = 'I_FrameCounter';
-        
         % Motor Rotation
         [~,id] = DAQ.addAnalogOutputChannel('Dev1',0:1,'Voltage');
         % [~,id] = DAQ.addDigitalChannel('Dev1','port0/line4:5','OutputOnly');
         DAQ.Channels(id(1)).Name = 'O_MotorStep';
         DAQ.Channels(id(2)).Name = 'O_MotorDir';
+        
+        % Imaging Computer Trigger (for timing)
+        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
+        DAQ.Channels(id).Name = 'O_2PTrigger';
+        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
+        DAQ.Channels(id).Name = 'I_FrameCounter';
         
         % Running Wheel
         if Experiment.params.runSpeed
@@ -1030,6 +1039,7 @@ if hObject.Value
         % Cleanup
         DAQChannels = {DAQ.Channels(:).Name};
         OutChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'O_')));
+        numOutChannels = numel(OutChannels);
         InChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'I_')));
         
 %         % Add clock
@@ -1046,7 +1056,6 @@ if hObject.Value
         DAQ.NotifyWhenScansQueuedBelow = DAQ.Rate-1; % queue more data when less than a second of data left
         DAQ.addlistener('DataAvailable', @SaveDataIn);  % create listener for when data is returned
         % DAQ.NotifyWhenDataAvailableExceeds = round(DAQ.Rate/100);
-
         
         %% Determine stimuli
         
@@ -1079,7 +1088,7 @@ if hObject.Value
         Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numel(OutChannels), Experiment.params.catchTrials+1);
         
         % Build stepper motor triggers
-        stepTriggers = moveStepperMotor(Experiment.params.angleMove, Experiment.params.samplingFrequency, 1, 2, false, 2);
+        stepTriggers = moveStepperMotor(Experiment.stim.angleMove, Experiment.params.samplingFrequency, 1, 2, false, 2);
         numStepTriggers = size(stepTriggers, 1);
         
         % Determine timing

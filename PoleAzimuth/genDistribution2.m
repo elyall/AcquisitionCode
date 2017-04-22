@@ -1,4 +1,4 @@
-function out = genDistribution(N,varargin)
+function out = genDistribution2(N,varargin)
 % N is an integer that specifies the number of values requested
 
 Distribution = 'constant'; % uniform, normal, specific, constant

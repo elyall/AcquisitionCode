@@ -215,7 +215,7 @@ gd.Stimuli.list = uitable(...
     'Units',                'Normalized',...
     'Position',             [.6,0,.4,1],...
     'ColumnName',           {'Combination','# per Block','Delete'},...
-    'ColumnFormat',         {'char','char','logical'},...
+    'ColumnFormat',         {'char','numeric','logical'},...
     'ColumnEditable',       [true,true,true],...
     'CellEditCallback',     @(hObject,eventdata)EditStimuli(hObject, eventdata, guidata(hObject)));
 
@@ -425,7 +425,7 @@ gd.Parameters.runSpeed = uicontrol(...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
 
 % EXPERIMENT
-% number of trials
+% number of blocks
 gd.Run.numBlocksText = uicontrol(...
     'Style',                'text',...
     'String',               '# Blocks',...
@@ -775,15 +775,9 @@ if hObject.Value
         %% Record date & time information
         Experiment.timing.init = datestr(now);
         
-        %% Initialize button
-        hObject.BackgroundColor = [0,0,0];
-        hObject.ForegroundColor = [1,1,1];
-        hObject.String = 'Stop';
-        
         %% Determine filenames to save to
         if gd.Saving.save.Value
             saveOut = true;
-            % mat file
             if exist(Experiment.saving.SaveFile, 'file')
                 answer = questdlg(sprintf('File already exists! Continue?\n%s', Experiment.saving.SaveFile), 'Overwrite file?', 'Yes', 'No', 'No');
                 if strcmp(answer, 'No')
@@ -792,15 +786,20 @@ if hObject.Value
                 end
             end
             SaveFile = Experiment.saving.SaveFile;
-            % bin file
-            Experiment.saving.DataFile = strcat(Experiment.saving.SaveFile(1:end-4), '.bin');
+            Experiment.saving.DataFile = strcat(Experiment.saving.SaveFile(1:end-4), '.bin'); % bin file
         else
             saveOut = false;
         end
         
+        %% Initialize button
+        hObject.BackgroundColor = [0,0,0];
+        hObject.ForegroundColor = [1,1,1];
+        hObject.String = 'Stop';
+        
         %% Set parameters
+        
         Experiment.stim.pistonCombinations = cellfun(@str2num,gd.Stimuli.list.Data(:,1),'UniformOutput',false);
-        Experiment.stim.numPerBlock = gd.Stimuli.list.Data(:,1);
+        Experiment.stim.numPerBlock = cell2mat(gd.Stimuli.list.Data(:,2));
         
         Experiment.stim.setup = cell2table(gd.Stimuli.ports.Data(:,1:3),'VariableNames',{'Name','Port','Active'});
         ActivePistons = unique([Experiment.stim.pistonCombinations{:}]);        % determine active pistons
@@ -918,12 +917,12 @@ if hObject.Value
         Experiment.StimID = 1:numel(Experiment.stim.pistonCombinations);
         if ~Experiment.params.catchTrials
             numStimuli = numel(Experiment.StimID);
-            gd.Run.numTrials.Data = [cat(1,gd.Stimuli.list.Data{:,2})*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
+            gd.Run.numTrials.Data = [Experiment.stim.numPerBlock*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
         else
             Experiment.StimID = [0, Experiment.StimID];
             Experiment.stim.pistonCombinations = [{[]};Experiment.stim.pistonCombinations];
             numStimuli = numel(Experiment.StimID);
-            gd.Run.numTrials.Data = [[Experiment.params.numCatchesPerBlock;cat(1,gd.Stimuli.list.Data{:,2})]*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
+            gd.Run.numTrials.Data = [[Experiment.params.numCatchesPerBlock;Experiment.stim.numPerBlock]*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
         end
         gd.Run.numTrials.RowName = Experiment.StimID;
         
