@@ -51,7 +51,7 @@ gd.Internal.buffer.downSample = 30;
 % Stim dependent variables
 gd.Experiment.stim.angleMove = 30;          % positive scalar:  default angle for stepper motor to move each trial
 gd.Internal.LinearStage.APport = 'com3';    % string:           specifies port
-gd.Internal.LinearStage.MLport = 'com4';    % string:           specifies port
+gd.Internal.LinearStage.MLport = 'com2';    % string:           specifies port
 
 
 %% Parse input arguments
@@ -456,7 +456,7 @@ gd.Parameters.repeatBadTrials = uicontrol(...
     'Position',             [0,.5,w1,.1],...
     'Callback',             @(hObject,eventdata)toggleRepeatBadTrials(hObject,eventdata,guidata(hObject)));
 % bad trial mean velocity threshold
-gd.Parameters.goodVelocityThresholdText = uicontrol(...
+gd.Parameters.speedThresholdText = uicontrol(...
     'Style',                'text',...
     'String',               'Threshold (deg/s)',...
     'Parent',               gd.Parameters.panel,...
@@ -464,7 +464,7 @@ gd.Parameters.goodVelocityThresholdText = uicontrol(...
     'Units',                'normalized',...
     'HorizontalAlignment',  'right',...
     'Position',             [w1,.5,w2,.1]);
-gd.Parameters.goodVelocityThreshold = uicontrol(...
+gd.Parameters.speedThreshold = uicontrol(...
     'Style',                'edit',...
     'String',               gd.Experiment.params.speedThreshold,...
     'Parent',               gd.Parameters.panel,...
@@ -753,6 +753,7 @@ load(fullfile(p,f), 'stimuli', '-mat');               % load stimuli
 gd.Stimuli.list.Data = num2cell(stimuli);             % display stimuli
 set([gd.Stimuli.save,gd.Stimuli.view],'Enable','on'); % update GUI
 fprintf('Loaded stimuli from: %s\n', fullfile(p,f));  % inform user
+estimateExpTime(gd);
 end
 
 function SaveStimuli(hObject, eventdata, gd)
@@ -831,6 +832,7 @@ out(:,toggle) = stimuli;
 gd.Stimuli.list.Data = [out,ones(size(out,1),1)]; % display stimuli
 set([gd.Stimuli.save,gd.Stimuli.view],'Enable','on');
 hObject.String = 'Generate Stimuli';
+estimateExpTime(gd);
 end
 
 function ViewStimuli(hObject, eventdata, gd)
@@ -856,6 +858,7 @@ if eventdata.Indices(2)==3      % change # of trials per block
 elseif eventdata.Indices(2)==4  % remove stimulus
     hObject.Data(eventdata.Indices(1),:) = []; % update display
 end
+estimateExpTime(gd);
 end
 
 
@@ -869,6 +872,7 @@ else
     set(hObject,'String','Add random ITI?','BackgroundColor',[.94,.94,.94]);
     set([gd.Parameters.randomITIText,gd.Parameters.randomITImax],'Enable','off');
 end
+estimateExpTime(gd);
 end
 
 function toggleCatchTrials(hObject, eventdata, gd)
@@ -879,15 +883,16 @@ else
     set(hObject,'String','Catch Trials?','BackgroundColor',[.94,.94,.94]);
     set([gd.Parameters.controlText,gd.Parameters.controlNum],'Enable','off');
 end
+estimateExpTime(gd);
 end
 
 function toggleRepeatBadTrials(hObject, eventdata, gd)
 if hObject.Value
     set(hObject,'String','Repeating bad trials','BackgroundColor',[0,1,0]);
-    set([gd.Parameters.goodVelocityThresholdText,gd.Parameters.goodVelocityThreshold],'Enable','on');
+    set([gd.Parameters.speedThresholdText,gd.Parameters.speedThreshold],'Enable','on');
 else
     set(hObject,'String','Repeat bad trials?','BackgroundColor',[.94,.94,.94]);
-    set([gd.Parameters.goodVelocityThresholdText,gd.Parameters.goodVelocityThreshold],'Enable','off');
+    set([gd.Parameters.speedThresholdText,gd.Parameters.speedThreshold],'Enable','off');
 end
 end
 
@@ -980,7 +985,7 @@ if hObject.Value
         
         %% Set parameters
         
-        Experiment.Position = gd.Stimuli.list.Data(:,1:2);
+        Experiment.stim.position = gd.Stimuli.list.Data(:,1:2);
         Experiment.stim.angleMove = str2double(gd.Controls.stepAngle.String);
         Experiment.stim.numPerBlock = gd.Stimuli.list.Data(:,3);
 
@@ -1094,21 +1099,23 @@ if hObject.Value
         % Determine axes
         Experiment.stim.activeAxes = false(1,2);
         for aindex = 1:2
-            if ~any(isnan(Experiment.Position(:,aindex)))
+            if ~any(isnan(Experiment.stim.position(:,aindex)))
                 Experiment.stim.activeAxes(aindex) = true;
             end
         end
-        
-        % Determine stimulus IDs
-        [Experiment.Position,~,Block] = unique(Experiment.Position,'rows');
-        Experiment.StimID = 1:size(Experiment.Position,1);
-        if Experiment.params.catchTrials
-            Experiment.StimID = [0, Experiment.StimID];
-            Block = [zeros(Experiment.params.numCatchesPerBlock,1); Block];
-            Experiment.Position = [nan(1,2); Experiment.Position];
-        end
-        numStimuli = numel(Experiment.StimID);
 
+        % Determine stimulus IDs & fill out trial table
+        Experiment.StimID = 1:size(Experiment.stim.position,1);
+        if ~Experiment.params.catchTrials
+            numStimuli = numel(Experiment.StimID);
+            gd.Run.numTrials.Data = [Experiment.stim.numPerBlock*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
+        else
+            Experiment.StimID = [0, Experiment.StimID];
+            Experiment.stim.position = [nan(1,2); Experiment.stim.position];
+            numStimuli = numel(Experiment.StimID);
+            gd.Run.numTrials.Data = [[Experiment.params.numCatchesPerBlock;Experiment.stim.numPerBlock]*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
+        end
+        gd.Run.numTrials.RowName = Experiment.StimID;
         
         %% Create triggers
         
@@ -1231,9 +1238,10 @@ if hObject.Value
         % Stim dependent
         ActiveAxes = find(Experiment.stim.activeAxes);
         Triggers = Experiment.Triggers;
-        Positions = Experiment.Position;
+        Positions = Experiment.stim.position;
         preppedTrial = false;
-
+        ControlTrial = Experiment.params.catchTrials;
+        
         % If adding random ITI
         if Experiment.params.randomITI
             MaxRandomScans = floor(Experiment.timing.randomITImax*Experiment.params.samplingFrequency);
@@ -1432,6 +1440,10 @@ end
             if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
                 fprintf(H_Scanbox,'S'); % stop recording
             end
+            
+            % Calculate mean running speed
+            TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate mean running speed during stimulus
+            fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex)); % display running speed
             
             % Determine if mouse was running during previous trial
             if TrialInfo.RunSpeed(RunIndex) < SpeedThreshold % mouse wasn't running
