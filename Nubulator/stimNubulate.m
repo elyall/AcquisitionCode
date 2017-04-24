@@ -756,10 +756,10 @@ if gd.Run.run.Value || isempty(gd.Stimuli.list.Data)
 end
 numStimuli = size(gd.Stimuli.list.Data,1);   % determine # of stimuli
 if ~gd.Parameters.control.Value              % no catch trials
-    numPerBlock = gd.Stimuli.list.Data(:,3); % gather # of trials per block
+    numPerBlock = cell2mat(gd.Stimuli.list.Data(:,2)); % gather # of trials per block
     first = 1;
 else
-    numPerBlock = [str2double(gd.Parameters.controlNum.String);gd.Stimuli.list.Data(:,3)]; % gather # of trials per block
+    numPerBlock = [str2double(gd.Parameters.controlNum.String);cell2mat(gd.Stimuli.list.Data(:,2))]; % gather # of trials per block
     first = 0;
 end
 gd.Run.numTrials.Data = [numPerBlock*str2double(gd.Run.numBlocks.String),zeros(numStimuli+1-first,3)];
