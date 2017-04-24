@@ -1019,7 +1019,6 @@ if hObject.Value
         trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
         
         % Stim dependent variables
-        % PistonCombinations = Experiment.stim.pistonCombinations;
         BaseTriggers = Experiment.Triggers;
         PistonTrigger = Experiment.PistonTrigger;
         
@@ -1056,12 +1055,10 @@ if hObject.Value
         smooth_win = smooth_win/sum(smooth_win);
         sw_len = length(smooth_win);
         d_smooth_win = [0;diff(smooth_win)]/(1/dsamp_Fs);
-%         RunBuffer = zeros(ceil(numBufferScans/dsamp), 1);
         hAxes = gd.Run.runSpeedAxes;
         
         % Variables for displaying stim info
         numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
-%         numRunScansReturned = floor(DAQ.NotifyWhenDataAvailableExceeds/dsamp);
         BufferStim = zeros(numBufferScans, 1);
         
         % Variables for determing if mouse was running
@@ -1318,7 +1315,7 @@ end
             end
             
             % Update information
-            numTrialsObj.Data(TrialInfo.StimID(currentTrial)==StimIDs,4) = numTrialsObj.Data(TrialInfo.StimID(currentTrial)==StimIDs,4) + 1;
+            numTrialsObj.Data(TrialInfo.StimID(currentTrial)==StimIDs,4) = numTrialsObj.Data(TrialInfo.StimID(currentTrial)==StimIDs,4) + 1; % record stim queued
             fprintf('\nQueued trial %d: stimulus %d', currentTrial, TrialInfo.StimID(currentTrial));
             if saveOut
                 save(SaveFile, 'TrialInfo', '-append');

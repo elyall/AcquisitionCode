@@ -913,11 +913,43 @@ end
 
 
 %% RUN EXPERIMENT
+function EditTrials(hObject, eventdata, gd)
+if ~isnumeric(eventdata.NewData) || round(eventdata.NewData)~=eventdata.NewData || eventdata.NewData<0
+    hObject.Data(eventdata.Indices(1),eventdata.Indices(2)) = eventdata.PreviousData;
+end
+end
+
+function estimateExpTime(gd)
+
+if isempty(gd.Stimuli.list.Data)
+    return
+end
+
+% Determine number of trials
+numTrialsPerBlock = sum(gd.Stimuli.list.Data(:,3));
+if gd.Parameters.control.Value
+    numTrialsPerBlock = numTrialsPerBlock + str2double(gd.Parameters.controlNum.String);
+end
+numBlocks = str2double(gd.Run.numBlocks.String);
+numTrials = numBlocks*numTrialsPerBlock;
+
+% Determine average duration of each trial
+trialDuration = str2double(gd.Parameters.stimDur.String) + str2double(gd.Parameters.ITI.String);  
+if gd.Parameters.randomITI.Value
+    trialDuration = trialDuration + str2double(gd.Parameters.randomITImax.String)/2;
+end
+
+% Calculate and display estimate
+ExpTime = numTrials*trialDuration+str2double(gd.Parameters.delay.String);
+gd.Run.estTime.UserData = ExpTime;
+gd.Run.estTime.String = sprintf('Est time: %.1f min',ExpTime/60);
+end
+
 function RunExperiment(hObject, eventdata, gd)
 
 if hObject.Value
     try
-        if ~isfield(gd.Experiment,'Position') || isempty(gd.Experiment.Position)
+        if isempty(gd.Stimuli.list.Data)
             error('No stimulus loaded! Please load some stimuli.');
         end
         Experiment = gd.Experiment;
@@ -950,7 +982,7 @@ if hObject.Value
         
         Experiment.Position = gd.Stimuli.list.Data(:,1:2);
         Experiment.stim.angleMove = str2double(gd.Controls.stepAngle.String);
-        Experiment.stim.numPerBlock = cell2mat(gd.Stimuli.list.Data(:,2));
+        Experiment.stim.numPerBlock = gd.Stimuli.list.Data(:,3);
 
         Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
         Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
@@ -1072,7 +1104,7 @@ if hObject.Value
         Experiment.StimID = 1:size(Experiment.Position,1);
         if Experiment.params.catchTrials
             Experiment.StimID = [0, Experiment.StimID];
-            Block = [zeros(Experiment.params.numCatchesPerBloc,1); Block];
+            Block = [zeros(Experiment.params.numCatchesPerBlock,1); Block];
             Experiment.Position = [nan(1,2); Experiment.Position];
         end
         numStimuli = numel(Experiment.StimID);
@@ -1180,18 +1212,21 @@ if hObject.Value
         
         % Necessary variables
         numTrialsObj = gd.Run.numTrials;
+        StimIDs = Experiment.StimID;
         ImagingType = Experiment.imaging.ImagingType;
         ImagingMode = Experiment.imaging.ImagingMode;
-        numScansBaseline = Experiment.params.samplingFrequency * numSecondsBaseline;
-        currentBlockOrder = Block;
-        numBlock = numel(currentBlockOrder);
-        ControlTrial = Experiment.params.catchTrials;
+        Block = [];
+        blockIndex = 0;
+        numBlock = 0;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
-        currentNewTrial = 0;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = false; % boolean to see if max trials has been reached
+        
+        % Estimating time remaining
+        timeObj = gd.Run.estTime;
+        trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
         
         % Stim dependent
         ActiveAxes = find(Experiment.stim.activeAxes);
@@ -1239,7 +1274,6 @@ if hObject.Value
         
         % Variables for determing if mouse was running
         RepeatBadTrials = Experiment.params.repeatBadTrials;
-        StimuliToRepeat = [];
         SpeedThreshold = Experiment.params.speedThreshold;
         RunIndex = 1;
         
@@ -1271,9 +1305,9 @@ if hObject.Value
         
         % Scanbox only: stop imaging
         if strcmp(Experiment.imaging.ImagingType, 'sbx')
-            if ~strcmp(ImagingMode,'Trial Imaging')
+%             if ~strcmp(ImagingMode,'Trial Imaging')
                 fprintf(H_Scanbox,'S'); % stop imaging
-            end
+%             end
             fclose(H_Scanbox);          % close connection
         end
         
@@ -1295,7 +1329,8 @@ if hObject.Value
             fclose(H_LinearStage(findex));
         end
         
-        % Reset button properties
+        % Reset GUI
+        estimateExpTime(gd);
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
@@ -1306,7 +1341,7 @@ if hObject.Value
         
         % Close any open connections
         try
-            if strcmp(Experiment.imaging.ImagingType, 'sbx')
+            if strcmp(ImagingType, 'sbx')
                 fprintf(H_Scanbox,'S'); %stop
                 fclose(H_Scanbox);
             end
@@ -1321,7 +1356,8 @@ if hObject.Value
             send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'','Experiment failed!');
         end
         
-        % Reset button properties
+        % Reset GUI
+        estimateExpTime(gd);
         hObject.Value = false;
         hObject.BackgroundColor = [.94,.94,.94];
         hObject.ForegroundColor = [0,0,0];
@@ -1351,8 +1387,13 @@ end
         % If experiment hasn't started, determine whether to start experiment
         if ~Started                                       % experiment hasn't started
             if DelayTimer                                   % delay timer started previously 
-                if toc(DelayTimer)>=Delay                       % requested delay time has been reached
+                currentTime = toc(DelayTimer);
+                if currentTime>=Delay                           % requested delay time has been reached
                     Started = true;                               	% start experiment
+                    timeObj.UserData = timeObj.UserData - Delay;
+                    timeObj.String = sprintf('Est time: %.1f min',timeObj.UserData/60);
+                else
+                    timeObj.String = sprintf('Est time: %.1f min',(timeObj.UserData-currentTime)/60);
                 end
             elseif any(eventdata.Data(:,FrameChannelIndex)) % first frame trigger received
                 if Delay                                    % delay requested
@@ -1385,26 +1426,30 @@ end
         % Record average running speed during stimulus period
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
             preppedTrial = false; % last stimulus ended -> prep next trial
+            numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,4) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,4) - 1; % update # queued for given stimulus
             
             % Trial Imaging mode: stop recording data
             if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
                 fprintf(H_Scanbox,'S'); % stop recording
             end
             
-            % Calculate mean running speed
-            TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate mean running speed during stimulus
-            fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex)); % display running speed
-            
             % Determine if mouse was running during previous trial
-            if TrialInfo.RunSpeed(RunIndex) < SpeedThreshold
-                TrialInfo.Running(RunIndex) = false;                                        % record that trial was bad
-                if RepeatBadTrials                                                          % repeate trial
-                    fprintf(' (trial to be repeated)');
-                    StimuliToRepeat = [StimuliToRepeat, TrialInfo.StimID(RunIndex)];        % add trial to repeat queue
-                end
-            else % mouse was running
-                TrialInfo.Running(RunIndex) = true;                                         % record that trial was good
+            if TrialInfo.RunSpeed(RunIndex) < SpeedThreshold % mouse wasn't running
+                TrialInfo.Running(RunIndex) = false;         % record trial was bad
+            else                                             % mouse was running
+                TrialInfo.Running(RunIndex) = true;          % record trial was good
             end
+            
+            % Determine if trial should be repeated or accepted
+            if RepeatBadTrials && ~TrialInfo.Running(RunIndex)  % repeat trial
+                fprintf(' (trial to be repeated)');
+                numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) + 1; % increment bad column
+            else
+                numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) + 1; % increment good column
+                timeObj.UserData = timeObj.UserData - trialDuration;
+                timeObj.String = sprintf('Est time: %.1f min',timeObj.UserData/60);
+            end
+            
             RunIndex = RunIndex+1; % increment index
             
             % Save to file
@@ -1412,8 +1457,13 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
-        elseif strcmp(ImagingMode,'Trial Imaging') && any(diff(BufferStim(numBufferScans+1:numBufferScans+numScansBaseline)) == RunIndex) && strcmp(ImagingType,'sbx') % next stimulus starts within window
-            fprintf(H_Scanbox,'G'); % start recording
+            % Trial Imaging mode: start recording data
+            if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
+                fprintf(H_Scanbox,'G'); % start recording
+            end
+            
+%         elseif strcmp(ImagingMode,'Trial Imaging') && any(diff(BufferStim(numBufferScans+1:numBufferScans+numScansBaseline)) == RunIndex) && strcmp(ImagingType,'sbx') % next stimulus starts within window
+%             fprintf(H_Scanbox,'G'); % start recording
         end %analyze last trial
         
         % Move motor(s) into position for next trial
@@ -1436,30 +1486,34 @@ end
 
 %% Callback: QueueOutputData
     function QueueData(src,eventdata)
+        numTrialsRemain = numTrialsObj.Data(:,1) - sum(numTrialsObj.Data(:,[2,4]),2);
+        numTrialsRemain(numTrialsRemain<0) = 0; % fix in case user changed request to less than good trials already given
         
         % Queue next trial
         if ~Started % imaging system hasn't started yet, queue one "blank" trial
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
             
-        elseif  hObject.Value && (currentTrial < str2double(numTrialsObj.String) || ~isempty(StimuliToRepeat)) % user hasn't quit, and requested # of trials hasn't been reached or no trials need to be repeated
+        elseif hObject.Value && any(numTrialsRemain) % user hasn't quit, and experiment hasn't finished
             
             % Update index
             currentTrial = currentTrial + 1;
+            blockIndex = blockIndex + 1;
             ExperimentReachedEnd = false;
             
-            % Determine StimID of stimulus to queue
-            if currentTrial <= str2double(numTrialsObj.String) % haven't reached end of experiment
-                currentNewTrial = currentNewTrial + 1;
-                blockIndex = rem(currentNewTrial-1, numBlock)+1;
-                if BlockShuffle && blockIndex == 1                                  % if starting new block, shuffle the stimuli order
-                    currentBlockOrder = currentBlockOrder(randperm(numBlock));      % shuffle block
+            % Create block if new block
+            if blockIndex > numBlock
+                numTrialsRemain = round(numTrialsRemain/min(numTrialsRemain(logical(numTrialsRemain))));
+                Block = repelem(StimIDs,numTrialsRemain);
+                numBlock = numel(Block);
+                blockIndex = 1;
+                if BlockShuffle
+                    Block = Block(randperm(numBlock)); % shuffle block
                 end
-                TrialInfo.StimID(currentTrial) = currentBlockOrder(blockIndex);     % determine StimID for current trial
-            else %trials need to be repeated
-                TrialInfo.StimID(currentTrial) = StimuliToRepeat(1);                % present first trial in repeat queue
-                StimuliToRepeat(1) = [];                                            % remove trial from repeat queue
             end
+            
+            % Determine StimID of stimulus to queue
+            TrialInfo.StimID(currentTrial) = Block(blockIndex);
             
             % First QueueData call: move motors into position for first trial
             if currentTrial == 1
@@ -1475,31 +1529,26 @@ end
                 end
             end
             
-            % Queue triggers
-            if TrialInfo.StimID(currentTrial) ~= 0              % current trial is not control trial
-                if ~MaxRandomScans                              % do not add random ITI
-                    DAQ.queueOutputData(Triggers(:,:,1));       % queue stim triggers
-                else
-                    TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
-                    DAQ.queueOutputData(cat(1,Triggers(:,:,1),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue stim triggers with extra scans
-                end
-            else                                                % current trial is control trial
-                if ~MaxRandomScans                              % do not add random ITI
-                    DAQ.queueOutputData(Triggers(:,:,2));       % queue control triggers
-                else
-                    TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]); % determine amount of extra scans to add
-                    DAQ.queueOutputData(cat(1,Triggers(:,:,2),zeros(TrialInfo.numRandomScansPost(currentTrial),numel(OutChannels)))); % queue control triggers with extra scans
-                end
+            % Determine triggers
+            if TrialInfo.StimID(currentTrial) ~= 0 % current trial is not control trial
+                index = 1;
+            else
+                index = 2;
             end
             
-            % Update buffer
-            if ~MaxRandomScans
-                BufferStim = cat(1, BufferStim, Stimulus*currentTrial);
+            % Queue triggers & update buffer
+            if ~MaxRandomScans                                          % do not add random ITI
+                DAQ.queueOutputData(Triggers(:,:,index));               % queue triggers
+                BufferStim = cat(1, BufferStim, Stimulus*currentTrial); % update buffer
             else
-                BufferStim = cat(1, BufferStim, Stimulus*currentTrial, zeros(TrialInfo.numRandomScansPost(currentTrial),1));
+                TrialInfo.numRandomScansPost(currentTrial) = randi([0,MaxRandomScans]);                                           % determine amount of extra scans to add
+                DAQ.queueOutputData(cat(1,Triggers(:,:,index),zeros(TrialInfo.numRandomScansPost(currentTrial),numOutChannels))); % queue triggers with extra scans
+                BufferStim = cat(1, BufferStim, Stimulus*currentTrial, zeros(TrialInfo.numRandomScansPost(currentTrial),1));      % update buffer
             end
+
             
             % Update information
+            numTrialsObj.Data(TrialInfo.StimID(currentTrial)==StimIDs,4) = numTrialsObj.Data(TrialInfo.StimID(currentTrial)==StimIDs,4) + 1; % record stim queued
             fprintf('\nQueued trial %d: stimulus %d', currentTrial, TrialInfo.StimID(currentTrial));
             if saveOut
                 save(SaveFile, 'TrialInfo', '-append');
@@ -1513,10 +1562,10 @@ end
             ExperimentReachedEnd = true;
         
         else % experiment is complete -> don't queue more scans
-            if currentTrial >= str2double(numTrialsObj.String)
-                fprintf('\nComplete: finished %d trials(s) (max trials reached)\n', currentTrial);
-            elseif ~hObject.Value
+            if ~hObject.Value
                 fprintf('\nComplete: finished %d trial(s) (user quit)\n', currentTrial);     
+            else
+                fprintf('\nComplete: finished %d trials(s) (max trials reached)\n', currentTrial);
             end
         end
     end
