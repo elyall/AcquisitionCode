@@ -374,7 +374,8 @@ gd.Parameters.stimDur = uicontrol(...
     'String',               gd.Experiment.timing.stimDuration,...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
-    'Position',             [w1+w2,.9,w3,.1]);
+    'Position',             [w1+w2,.9,w3,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % image acq mode
 gd.Parameters.imagingMode = uicontrol(...
     'Style',                'togglebutton',...
@@ -397,7 +398,8 @@ gd.Parameters.ITI = uicontrol(...
     'String',               gd.Experiment.timing.ITI,...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
-    'Position',             [w1+w2,.8,w3,.1]);
+    'Position',             [w1+w2,.8,w3,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % random interval toggle
 gd.Parameters.randomITI = uicontrol(...
     'Style',                'checkbox',...
@@ -421,7 +423,8 @@ gd.Parameters.randomITImax = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
     'Enable',               'off',...
-    'Position',             [w1+w2,.7,w3,.1]);
+    'Position',             [w1+w2,.7,w3,.1],...
+    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
 % catch trial toggle
 gd.Parameters.control = uicontrol(...
     'Style',                'checkbox',...
@@ -445,7 +448,8 @@ gd.Parameters.controlNum = uicontrol(...
     'Parent',               gd.Parameters.panel,...
     'Enable',               'off',...
     'Units',                'normalized',...
-    'Position',             [w1+w2,.6,w3,.1]);
+    'Position',             [w1+w2,.6,w3,.1],...
+    'Callback',             @(hObject,eventdata)ChangeNumCatches(hObject,eventdata,guidata(hObject)));
 % repeat bad trials toggle
 gd.Parameters.repeatBadTrials = uicontrol(...
     'Style',                'checkbox',...
@@ -564,7 +568,7 @@ gd.Run.numBlocks = uicontrol(...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
     'Position',             [.125,.9,.125,.1],...
-    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
+    'Callback',             @(hObject,eventdata)ChangeNumBlocks(hObject,eventdata,guidata(hObject)));
 % send text message when complete
 gd.Run.textUser = uicontrol(...
     'Style',                'checkbox',...
@@ -753,6 +757,7 @@ load(fullfile(p,f), 'stimuli', '-mat');               % load stimuli
 gd.Stimuli.list.Data = num2cell(stimuli);             % display stimuli
 set([gd.Stimuli.save,gd.Stimuli.view],'Enable','on'); % update GUI
 fprintf('Loaded stimuli from: %s\n', fullfile(p,f));  % inform user
+updateTrialTable(gd);
 estimateExpTime(gd);
 end
 
@@ -829,7 +834,11 @@ end
 out = nan(size(stimuli,1),numel(toggle));
 out(:,toggle) = stimuli;
 
+% Update tables
 gd.Stimuli.list.Data = [out,ones(size(out,1),1)]; % display stimuli
+updateTrialTable(gd);                             % display trials
+
+% Update GUI
 set([gd.Stimuli.save,gd.Stimuli.view],'Enable','on');
 hObject.String = 'Generate Stimuli';
 estimateExpTime(gd);
@@ -858,6 +867,7 @@ if eventdata.Indices(2)==3      % change # of trials per block
 elseif eventdata.Indices(2)==4  % remove stimulus
     hObject.Data(eventdata.Indices(1),:) = []; % update display
 end
+updateTrialTable(gd);
 estimateExpTime(gd);
 end
 
@@ -883,6 +893,12 @@ else
     set(hObject,'String','Catch Trials?','BackgroundColor',[.94,.94,.94]);
     set([gd.Parameters.controlText,gd.Parameters.controlNum],'Enable','off');
 end
+updateTrialTable(gd);
+estimateExpTime(gd);
+end
+
+function ChangeNumCatches(hObject,eventdata,gd)
+updateTrialTable(gd);
 estimateExpTime(gd);
 end
 
@@ -918,15 +934,44 @@ end
 
 
 %% RUN EXPERIMENT
+function ChangeNumBlocks(hObject,eventdata,gd)
+value = str2double(hObject.String);
+if ~isnumeric(value) || round(value)~=value || value<1
+    hObject.String = gd.Experiment.params.numBlocks;
+end
+if gd.Run.run.Value
+    gd.Run.numTrials.Data(:,1) = hObject.UserData*str2double(hObject.String);
+else
+    updateTrialTable(gd);
+    estimateExpTime(gd);
+end
+end
+
+function updateTrialTable(gd)
+if gd.Run.run.Value || isempty(gd.Stimuli.list.Data)
+    return
+end
+numStimuli = size(gd.Stimuli.list.Data,1);   % determine # of stimuli
+if ~gd.Parameters.control.Value              % no catch trials
+    numPerBlock = gd.Stimuli.list.Data(:,3); % gather # of trials per block
+    first = 1;
+else
+    numPerBlock = [str2double(gd.Parameters.controlNum.String);gd.Stimuli.list.Data(:,3)]; % gather # of trials per block
+    first = 0;
+end
+gd.Run.numTrials.Data = [numPerBlock*str2double(gd.Run.numBlocks.String),zeros(numStimuli+1-first,3)];
+gd.Run.numTrials.RowName = first:numStimuli;
+gd.Run.numBlocks.UserData = numPerBlock;
+end
+
 function EditTrials(hObject, eventdata, gd)
-if ~isnumeric(eventdata.NewData) || round(eventdata.NewData)~=eventdata.NewData || eventdata.NewData<0
-    hObject.Data(eventdata.Indices(1),eventdata.Indices(2)) = eventdata.PreviousData;
+if ~isnumeric(eventdata.NewData) || round(eventdata.NewData)~=eventdata.NewData || eventdata.NewData<0 % ensure value is positive integer
+    hObject.Data(eventdata.Indices(1),eventdata.Indices(2)) = eventdata.PreviousData; % replace with previous value
 end
 end
 
 function estimateExpTime(gd)
-
-if isempty(gd.Stimuli.list.Data)
+if gd.Run.run.Value || isempty(gd.Stimuli.list.Data)
     return
 end
 
@@ -1104,18 +1149,12 @@ if hObject.Value
             end
         end
 
-        % Determine stimulus IDs & fill out trial table
-        Experiment.StimID = 1:size(Experiment.stim.position,1);
-        if ~Experiment.params.catchTrials
-            numStimuli = numel(Experiment.StimID);
-            gd.Run.numTrials.Data = [Experiment.stim.numPerBlock*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
-        else
-            Experiment.StimID = [0, Experiment.StimID];
+        % Determine stimulus IDs
+        Experiment.StimID = str2num(gd.Run.numTrials.RowName);
+        numStimuli = numel(Experiment.StimID);
+        if Experiment.StimID==0
             Experiment.stim.position = [nan(1,2); Experiment.stim.position];
-            numStimuli = numel(Experiment.StimID);
-            gd.Run.numTrials.Data = [[Experiment.params.numCatchesPerBlock;Experiment.stim.numPerBlock]*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
-        end
-        gd.Run.numTrials.RowName = Experiment.StimID;
+        end        
         
         %% Create triggers
         
@@ -1395,13 +1434,10 @@ end
         % If experiment hasn't started, determine whether to start experiment
         if ~Started                                       % experiment hasn't started
             if DelayTimer                                   % delay timer started previously 
-                currentTime = toc(DelayTimer);
-                if currentTime>=Delay                           % requested delay time has been reached
+                if toc(DelayTimer)>=Delay                           % requested delay time has been reached
                     Started = true;                               	% start experiment
-                    timeObj.UserData = timeObj.UserData - Delay;
-                    timeObj.String = sprintf('Est time: %.1f min',timeObj.UserData/60);
                 else
-                    timeObj.String = sprintf('Est time: %.1f min',(timeObj.UserData-currentTime)/60);
+                    timeObj.String = sprintf('Est time: %.1f min',(timeObj.UserData-toc(DelayTimer))/60);
                 end
             elseif any(eventdata.Data(:,FrameChannelIndex)) % first frame trigger received
                 if Delay                                    % delay requested
@@ -1458,8 +1494,6 @@ end
                 numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) + 1; % increment bad column
             else
                 numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) + 1; % increment good column
-                timeObj.UserData = timeObj.UserData - trialDuration;
-                timeObj.String = sprintf('Est time: %.1f min',timeObj.UserData/60);
             end
             
             RunIndex = RunIndex+1; % increment index
@@ -1498,15 +1532,20 @@ end
 
 %% Callback: QueueOutputData
     function QueueData(src,eventdata)
-        numTrialsRemain = numTrialsObj.Data(:,1) - sum(numTrialsObj.Data(:,[2,4]),2);
-        numTrialsRemain(numTrialsRemain<0) = 0; % fix in case user changed request to less than good trials already given
         
-        % Queue next trial
         if ~Started % imaging system hasn't started yet, queue one "blank" trial
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
-            
-        elseif hObject.Value && any(numTrialsRemain) % user hasn't quit, and experiment hasn't finished
+            return
+        end
+        
+        % Determine number of remaining trials
+        numTrialsRemain = numTrialsObj.Data(:,1) - sum(numTrialsObj.Data(:,[2,4]),2);
+        numTrialsRemain(numTrialsRemain<0) = 0; % fix in case user changed request to less than good trials already given
+        timeObj.String = sprintf('Est time: %.1f min',trialDuration*sum(numtrialsRemain)/60);
+        
+        % Queue next trial
+        if hObject.Value && any(numTrialsRemain) % user hasn't quit, and experiment hasn't finished
             
             % Update index
             currentTrial = currentTrial + 1;

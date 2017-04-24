@@ -319,7 +319,7 @@ gd.Parameters.controlNum = uicontrol(...
     'Enable',               'off',...
     'Units',                'normalized',...
     'Position',             [w1+w2,.6,w3,.1],...
-    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
+    'Callback',             @(hObject,eventdata)ChangeNumCatches(hObject,eventdata,guidata(hObject)));
 % repeat bad trials toggle
 gd.Parameters.repeatBadTrials = uicontrol(...
     'Style',                'checkbox',...
@@ -439,7 +439,7 @@ gd.Run.numBlocks = uicontrol(...
     'Parent',               gd.Run.panel,...
     'Units',                'normalized',...
     'Position',             [.125,.9,.125,.1],...
-    'Callback',             @(hObject,eventdata)estimateExpTime(guidata(hObject)));
+    'Callback',             @(hObject,eventdata)ChangeNumBlocks(hObject,eventdata,guidata(hObject)));
 % send text message when complete
 gd.Run.textUser = uicontrol(...
     'Style',                'checkbox',...
@@ -595,6 +595,33 @@ end
 end
 
 %% STIMULI CALLBACKS
+function LoadStimuli(hObject, eventdata, gd)
+[f,p] = uigetfile({'*.stim';'*.mat'},'Select stim file to load',cd); % select and load file
+if isnumeric(f)
+    return % user hit cancel
+end
+load(fullfile(p,f), 'stimuli', '-mat');                             % load stimuli
+gd.Stimuli.list.Data = [stimuli,num2cell(false(size(stimuli,1),1))];% display stimuli
+set(gd.Stimuli.save,'Enable','on');                                 % update GUI
+fprintf('Loaded stimuli from: %s\n', fullfile(p,f));                % inform user
+updateTrialTable(gd);
+estimateExpTime(gd);
+end
+
+function SaveStimuli(hObject, eventdata, gd)
+[f,p] = uiputfile({'*.stim';'*.mat'},'Save stimuli as?',cd); % determine file to save to
+if isnumeric(f)
+    return % user hit cancel
+end
+saveFile = fullfile(p,f);               % determine filename
+stimuli = gd.Stimuli.list.Data(:,1:2);  % gather stimuli
+if ~exist(saveFile,'file')              % save stimuli
+    save(saveFile, 'stimuli', '-mat', '-v7.3');
+else
+    save(saveFile, 'stimuli', '-mat', '-append');
+end
+fprintf('Stimuli saved to: %s\n', saveFile); % inform user
+end
 
 function EditPorts(hObject, eventdata, gd)
 if eventdata.Indices(2)==2      % update DAQ
@@ -618,6 +645,7 @@ if eventdata.Indices(2)==2      % change # of trials per block
 elseif eventdata.Indices(2)==3  % delete stimulus
     hObject.Data(eventdata.Indices(1),:) = [];
 end
+updateTrialTable(gd);
 estimateExpTime(gd);
 end
 
@@ -644,36 +672,8 @@ numStimuli = numel(stimuli);
 % Display combinations
 gd.Stimuli.list.Data = [cellfun(@num2str, stimuli, 'UniformOutput',false),num2cell(ones(numStimuli,1)),num2cell(false(numStimuli,1))];
 
+updateTrialTable(gd);
 estimateExpTime(gd);
-end
-
-function LoadStimuli(hObject, eventdata, gd)
-
-% Select and load file
-[f,p] = uigetfile({'*.stim';'*.mat'},'Select stim file to load',cd);
-if isnumeric(f)
-    return
-end
-load(fullfile(p,f), 'stimuli', '-mat');
-numStimuli = size(stimuli,1);
-fprintf('Loaded %d stimuli from: %s\n', numStimuli, fullfile(p,f));
-
-% Display combinations
-gd.Stimuli.list.Data = [stimuli,num2cell(false(numStimuli,1))];
-estimateExpTime(gd);
-end
-
-function SaveStimuli(hObject, eventdata, gd)
-% Determine file to save to
-[f,p] = uiputfile({'*.stim';'*.mat'},'Save stimuli as?',cd);
-if isnumeric(f)
-    return
-end
-
-% Save stimuli
-stimuli = gd.Stimuli.list.Data(:,1:2);
-save(fullfile(p,f), 'stimuli', '-mat', '-v7.3');
-fprintf('Stimuli saved to: %s\n', fullfile(p,f));
 end
 
 %% PARAMETERS CALLBACKS
@@ -697,6 +697,12 @@ else
     set(hObject,'String','Catch Trials?','BackgroundColor',[.94,.94,.94]);
     set([gd.Parameters.controlText,gd.Parameters.controlNum],'Enable','off');
 end
+updateTrialTable(gd);
+estimateExpTime(gd);
+end
+
+function ChangeNumCatches(hObject,eventdata,gd)
+updateTrialTable(gd);
 estimateExpTime(gd);
 end
 
@@ -731,6 +737,36 @@ guidata(hObject, gd);
 end
 
 %% RUN EXPERIMENT
+function ChangeNumBlocks(hObject,eventdata,gd)
+value = str2double(hObject.String);
+if ~isnumeric(value) || round(value)~=value || value<1
+    hObject.String = gd.Experiment.params.numBlocks;
+end
+if gd.Run.run.Value
+    gd.Run.numTrials.Data(:,1) = hObject.UserData*str2double(hObject.String);
+else
+    updateTrialTable(gd);
+    estimateExpTime(gd);
+end
+end
+
+function updateTrialTable(gd)
+if gd.Run.run.Value || isempty(gd.Stimuli.list.Data)
+    return
+end
+numStimuli = size(gd.Stimuli.list.Data,1);   % determine # of stimuli
+if ~gd.Parameters.control.Value              % no catch trials
+    numPerBlock = gd.Stimuli.list.Data(:,3); % gather # of trials per block
+    first = 1;
+else
+    numPerBlock = [str2double(gd.Parameters.controlNum.String);gd.Stimuli.list.Data(:,3)]; % gather # of trials per block
+    first = 0;
+end
+gd.Run.numTrials.Data = [numPerBlock*str2double(gd.Run.numBlocks.String),zeros(numStimuli+1-first,3)];
+gd.Run.numTrials.RowName = first:numStimuli;
+gd.Run.numBlocks.UserData = numPerBlock;
+end
+
 function EditTrials(hObject, eventdata, gd)
 if ~isnumeric(eventdata.NewData) || round(eventdata.NewData)~=eventdata.NewData || eventdata.NewData<0
     hObject.Data(eventdata.Indices(1),eventdata.Indices(2)) = eventdata.PreviousData;
@@ -913,18 +949,12 @@ if hObject.Value
         
         %% Determine stimuli
         
-        % Determine stimulus IDs & fill out trial table
-        Experiment.StimID = 1:numel(Experiment.stim.pistonCombinations);
+        % Determine stimulus IDs
+        Experiment.StimID = str2num(gd.Run.numTrials.RowName);
+        numStimuli = numel(Experiment.StimID);
         if ~Experiment.params.catchTrials
-            numStimuli = numel(Experiment.StimID);
-            gd.Run.numTrials.Data = [Experiment.stim.numPerBlock*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
-        else
-            Experiment.StimID = [0, Experiment.StimID];
             Experiment.stim.pistonCombinations = [{[]};Experiment.stim.pistonCombinations];
-            numStimuli = numel(Experiment.StimID);
-            gd.Run.numTrials.Data = [[Experiment.params.numCatchesPerBlock;Experiment.stim.numPerBlock]*str2double(gd.Run.numBlocks.String),zeros(numStimuli,3)];
         end
-        gd.Run.numTrials.RowName = Experiment.StimID;
         
         % Create stim matrix
         Experiment.stim.stim = false(numStimuli,nnz(Experiment.stim.setup.Active));
