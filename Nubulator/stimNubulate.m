@@ -1299,15 +1299,20 @@ end
 
 %% Callback: QueueOutputData
     function QueueData(src,eventdata)
+                
+        if ~Started % imaging system hasn't started yet, queue one "blank" trial
+            DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
+            BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
+            return
+        end
+        
+        % Determine number of remaining trials
         numTrialsRemain = numTrialsObj.Data(:,1) - sum(numTrialsObj.Data(:,[2,4]),2);
         numTrialsRemain(numTrialsRemain<0) = 0; % fix in case user changed request to less than good trials already given
+        timeObj.String = sprintf('Est time: %.1f min',trialDuration*sum(numTrialsRemain)/60);
         
         % Queue next trial
-        if ~Started % imaging system hasn't started yet, queue one "blank" trial
-            DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numOutChannels));
-            BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
-            
-        elseif hObject.Value && any(numTrialsRemain) % user hasn't quit, and experiment hasn't finished
+        if hObject.Value && any(numTrialsRemain) % user hasn't quit, and experiment hasn't finished
             
             % Update indices
             currentTrial = currentTrial + 1;

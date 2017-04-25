@@ -38,7 +38,7 @@ gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate o
 gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle block order each block?
 gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
 gd.Experiment.params.holdStart = true;          % booleon:          wait to start experiment until after first frame trigger received?
-gd.Experiment.params.delay = 3;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
+gd.Experiment.params.delay = 0;                 % positive scalar:  amount of time to delay start of experiment (either after first frame trigger received)
 
 % Text user details
 gd.Internal.textUser.number = '7146241885';
@@ -1542,7 +1542,7 @@ end
         % Determine number of remaining trials
         numTrialsRemain = numTrialsObj.Data(:,1) - sum(numTrialsObj.Data(:,[2,4]),2);
         numTrialsRemain(numTrialsRemain<0) = 0; % fix in case user changed request to less than good trials already given
-        timeObj.String = sprintf('Est time: %.1f min',trialDuration*sum(numtrialsRemain)/60);
+        timeObj.String = sprintf('Est time: %.1f min',trialDuration*sum(numTrialsRemain)/60);
         
         % Queue next trial
         if hObject.Value && any(numTrialsRemain) % user hasn't quit, and experiment hasn't finished
