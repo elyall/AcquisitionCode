@@ -1152,7 +1152,7 @@ if hObject.Value
         % Determine stimulus IDs
         Experiment.StimID = str2num(gd.Run.numTrials.RowName);
         numStimuli = numel(Experiment.StimID);
-        if Experiment.StimID==0
+        if Experiment.params.catchTrials
             Experiment.stim.position = [nan(1,2); Experiment.stim.position];
         end        
         
@@ -1517,7 +1517,7 @@ end
             preppedTrial = true;
             
             if TrialInfo.StimID(RunIndex)==0        % next trial is a control trial
-                temp = randi([ControlTrial+1,numStimuli]);
+                temp = randi([2,numStimuli]);
                 for index=ActiveAxes
                     moveLinearMotor(Positions(temp,index), H_LinearStage(index)); %move motor
                 end
@@ -1569,7 +1569,7 @@ end
             % First QueueData call: move motors into position for first trial
             if currentTrial == 1
                 if TrialInfo.StimID(currentTrial)==0        % first trial is a control trial
-                    temp = randi([ControlTrial+1,numStimuli]);
+                    temp = randi([2,numStimuli]);
                     for index=ActiveAxes
                         moveLinearMotor(Positions(temp,index), H_LinearStage(index)); %move motor
                     end

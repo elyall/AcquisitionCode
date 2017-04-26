@@ -952,7 +952,7 @@ if hObject.Value
         % Determine stimulus IDs
         Experiment.StimID = str2num(gd.Run.numTrials.RowName);
         numStimuli = numel(Experiment.StimID);
-        if ~Experiment.params.catchTrials
+        if Experiment.params.catchTrials
             Experiment.stim.pistonCombinations = [{[]};Experiment.stim.pistonCombinations];
         end
         
