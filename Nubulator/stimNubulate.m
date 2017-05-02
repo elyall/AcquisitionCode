@@ -542,12 +542,17 @@ end
 function KeyPressCallback(hObject, eventdata, gd)
 if ismember(eventdata.Key,num2str(1:size(gd.Stimuli.ports.Data,1)))
     Port = str2double(eventdata.Key);
+    gd.Stimuli.ports.Data{Port,4} = ~gd.Stimuli.ports.Data{Port,4};
 elseif ismember(eventdata.Key,strcat('numpad',cellstr(num2str((1:size(gd.Stimuli.ports.Data,1))'))))
     Port = str2double(eventdata.Key(end));
+    gd.Stimuli.ports.Data{Port,4} = ~gd.Stimuli.ports.Data{Port,4};
+elseif strcmp(eventdata.Key,'return')
+    for index = find([gd.Stimuli.ports.Data{:,3}])
+        gd.Stimuli.ports.Data{index,4} = ~gd.Stimuli.ports.Data{index,4};
+    end
 else
     return
 end
-gd.Stimuli.ports.Data{Port,4} = ~gd.Stimuli.ports.Data{Port,4};
 try
     gd.Internal.daq.outputSingleScan([gd.Stimuli.ports.Data{:,4}]);
 end
