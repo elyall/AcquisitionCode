@@ -1206,8 +1206,6 @@ end
                 currentTime = toc(DelayTimer);
                 if currentTime>=Delay                           % requested delay time has been reached
                     Started = true;                               	% start experiment
-                    timeObj.UserData = timeObj.UserData - Delay;
-                    timeObj.String = sprintf('Est time: %.1f min',timeObj.UserData/60);
                 else
                     timeObj.String = sprintf('Est time: %.1f min',(timeObj.UserData-currentTime)/60);
                 end
@@ -1280,8 +1278,6 @@ end
                 numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,3) + 1; % increment bad column
             else
                 numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,2) + 1; % increment good column
-                timeObj.UserData = timeObj.UserData - trialDuration;
-                timeObj.String = sprintf('Est time: %.1f min',timeObj.UserData/60);
             end
             
             RunIndex = RunIndex+1; % increment index
