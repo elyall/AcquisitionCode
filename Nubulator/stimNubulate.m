@@ -35,6 +35,7 @@ gd.Experiment.params.repeatBadTrials = true;    % booleon:          repeat non-r
 gd.Experiment.params.speedThreshold = 100;      % positive scalar:  velocity threshold for good running trials (deg/s)
 gd.Experiment.params.whiskerTracking = false;   % booleon:          send triggers for whisker tracking camera?
 gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
+gd.Experiment.params.WTtype = false;            %
 gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle block order each block?
 gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
 gd.Experiment.params.holdStart = true;          % booleon:          wait to start experiment until after first frame trigger received?
@@ -959,6 +960,7 @@ if hObject.Value
         numStimuli = numel(Experiment.StimID);
         if Experiment.params.catchTrials
             Experiment.stim.pistonCombinations = [{[]};Experiment.stim.pistonCombinations];
+            Experiment.stim.numPerBlock = [Experiment.params.numCatchesPerBlock;Experiment.stim.numPerBlock];
         end
         
         % Create stim matrix
@@ -1027,11 +1029,6 @@ if hObject.Value
             fprintf(H_Scanbox,sprintf('E%s',gd.Saving.index.String));
         end
         
-        %% Initialize saving
-        if saveOut
-            save(SaveFile, 'DAQChannels', 'Experiment', '-mat', '-v7.3');
-            H_DataFile = fopen(Experiment.saving.DataFile, 'w');
-        end
         
         %% Initialize shared variables (only share what's necessary)
         
@@ -1074,6 +1071,7 @@ if hObject.Value
         else
             Started = true;
         end
+        numDelayScans = 0;
         
         % Variables if saving input data
         if saveOut
@@ -1100,6 +1098,13 @@ if hObject.Value
         RepeatBadTrials = Experiment.params.repeatBadTrials;
         SpeedThreshold = Experiment.params.speedThreshold;
         RunIndex = 1;
+        
+        
+        %% Initialize saving
+        if saveOut
+            save(SaveFile, 'DAQChannels', 'Experiment', 'numDelayScans', '-mat', '-v7.3');
+            H_DataFile = fopen(Experiment.saving.DataFile, 'w');
+        end
         
         
         %% Start Experiment
@@ -1304,6 +1309,10 @@ end
         if ~Started % imaging system hasn't started yet, queue one "blank" trial
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
+            if saveOut
+                numDelayScans = numDelayScans + 2*DAQ.NotifyWhenScansQueuedBelow;
+                save(SaveFile, 'numDelayScans', '-append');
+            end
             return
         end
         
@@ -1342,6 +1351,7 @@ end
             
             % Queue triggers & update buffer
             if ~MaxRandomScans                                          % do not add random ITI
+                TrialInfo.numRandomScansPost(currentTrial) = 0;
                 DAQ.queueOutputData(CurrentTriggers);                   % queue triggers
                 BufferStim = cat(1, BufferStim, Stimulus*currentTrial); % update buffer
             else
@@ -1363,7 +1373,11 @@ end
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numOutChannels));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
             ExperimentReachedEnd = true;
-        
+            TrialInfo.numRandomScansPost(currentTrial) = TrialInfo.numRandomScansPost(currentTrial) + 2*DAQ.NotifyWhenScansQueuedBelow;
+            if saveOut
+                save(SaveFile, 'TrialInfo', '-append');
+            end
+            
         else % experiment is complete -> don't queue more scans
             if ~hObject.Value
                 fprintf('\nComplete: finished %d trial(s) (user quit)\n', currentTrial);  
