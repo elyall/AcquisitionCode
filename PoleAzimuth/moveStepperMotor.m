@@ -40,31 +40,34 @@ if ~exist('numOutPorts', 'var') || isempty(numOutPorts)
     numOutPorts = 2;
 end
 
-Slow = 27;  % # of zeros in each slow step (sets start and end speed of motor)
-Fast = 7;   % # of zeros in each fast step (set maximum speed allowed)
-
+Slow = 11;      % # of zeros in slowest step (sets start and end speed of movement)
+Fast = 7;      % # of zeros in fastest step (sets maximum speed allowed)
+N = 8;         % # of repititions at each accel/deccel speed
+speedStep = 2; % # of zeros to add between each accel/deccel speed increment
 
 %% Create step triggers
 
 numSteps = abs(round(RelativeAngle*1/baseangle)); %number of microsteps motor will make
 
 % Create acceleration and decceleration steps
-n = Slow-Fast; % # of steps in accel & deccel
-if 2*n > numSteps %if acceleration and decceleration will move further than requested
-    n = floor(numSteps/2); %only move the distance requested within the acceleration and decceleration
-    Fast = Slow - n;
+speeds = Slow:-speedStep:Fast+1; % accel/deccel speeds
+speeds = repelem(speeds,N);      % replicate each speed # of times each will occur
+stepScan = cumsum([1,speeds]);   % scan index of each high value (step)
+accel = zeros(max(stepScan),1);  % initialize accel vector
+accel(stepScan) = 1;             % set step scans to be high
+if 2*sum(accel) > numSteps % acceleration and decceleration alone will move further than requested
+    stepID = floor(numSteps/2);         % determine on what step to stop accelerating
+    accel = accel(1:stepScan(stepID));  % trim acceleration vector
+    Fast = speeds(stepID);              % recognize fastest speed reached
 end
-stepScan = cumsum([1,Slow:-1:(Slow-n)]);
-accel = zeros(max(stepScan),1);
-accel(stepScan) = 1;
-deccel = flip(accel);
+deccel = flip(accel);            % decceleration is inverse of acceleration
  
 % Create center steps
-numStepsMiddle = numSteps - 2*n;
-steps = repmat([1;zeros(Fast,1)],numStepsMiddle,1);
+numStepsMiddle = numSteps - (sum(accel) + sum(deccel)); % determine # of steps for bar to travel at fastest speed
+steps = repmat([1;zeros(Fast,1)],numStepsMiddle,1);     % create vector for bar moving at fastest speed (not accelerating nor deccelerating)
 
 % Create final trigger vector
-stepTriggers = cat(1,0,accel,zeros(Fast,1),steps,deccel,0);
+stepTriggers = cat(1,0,accel,zeros(Fast,1),steps,deccel,0); % create final vector to move bar
 
 
 %% Create output
