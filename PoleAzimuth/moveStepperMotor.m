@@ -40,31 +40,31 @@ if ~exist('numOutPorts', 'var') || isempty(numOutPorts)
     numOutPorts = 2;
 end
 
-Slow = 11;
-Mid = 9;
-Fast = 7;
-n = 20;
+Slow = 27;  % # of zeros in each slow step (sets start and end speed of motor)
+Fast = 7;   % # of zeros in each fast step (set maximum speed allowed)
+
 
 %% Create step triggers
 
 numSteps = abs(round(RelativeAngle*1/baseangle)); %number of microsteps motor will make
 
 % Create acceleration and decceleration steps
-% n=round(samplingFrequency/4000); %determine needed amount of acceleration and decceleration steps based on the sampling frequency
-if 4*n > numSteps %if acceleration and decceleration will move further than requested
-    n = floor(numSteps/4); %only move the distance requested within the acceleration and decceleration
+n = Slow-Fast; % # of steps in accel & deccel
+if 2*n > numSteps %if acceleration and decceleration will move further than requested
+    n = floor(numSteps/2); %only move the distance requested within the acceleration and decceleration
+    Fast = Slow - n;
 end
-accel=[repmat([1;zeros(Slow,1)],n,1);repmat([1;zeros(Mid,1)],n,1)]; %acceleration waveforms and units
-% numStepsAccel = sum(accel);
-deccel=[repmat([1;zeros(Mid,1)],n,1);repmat([1;zeros(Slow,1)],n-1,1);1]; %decceleration waveforms and units\
-% numStepsDeccel = sum(deccel);
-
+stepScan = cumsum([1,Slow:-1:(Slow-n)]);
+accel = zeros(max(stepScan),1);
+accel(stepScan) = 1;
+deccel = flip(accel);
+ 
 % Create center steps
-numStepsMiddle = numSteps - 4*n; %old: =numsteps - numStepsAccel - numStepsDeccel;
+numStepsMiddle = numSteps - 2*n;
 steps = repmat([1;zeros(Fast,1)],numStepsMiddle,1);
 
 % Create final trigger vector
-stepTriggers = cat(1,0,accel,steps,deccel,0);
+stepTriggers = cat(1,0,accel,zeros(Fast,1),steps,deccel,0);
 
 
 %% Create output
