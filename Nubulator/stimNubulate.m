@@ -1044,7 +1044,7 @@ if hObject.Value
         numBlock = 0;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
-        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
+        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', [], 'numRandomScansPost', []);
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = -1; % boolean to see if max trials has been reached
         
@@ -1315,11 +1315,13 @@ end
     function QueueData(src,eventdata)
         
         if ~Started % imaging system hasn't started yet, queue one "blank" trial
-            DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
-            BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
-            if saveOut
-                numDelayScans = numDelayScans + 2*DAQ.NotifyWhenScansQueuedBelow;
-                save(SaveFile, 'numDelayScans', '-append');
+            if hObject.Value
+                DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
+                BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
+                if saveOut
+                    numDelayScans = numDelayScans + 2*DAQ.NotifyWhenScansQueuedBelow;
+                    save(SaveFile, 'numDelayScans', '-append');
+                end
             end
             return
         end

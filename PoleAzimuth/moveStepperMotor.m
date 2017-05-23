@@ -40,10 +40,10 @@ if ~exist('numOutPorts', 'var') || isempty(numOutPorts)
     numOutPorts = 2;
 end
 
-Slow = 11;      % # of zeros in slowest step (sets start and end speed of movement)
-Fast = 7;      % # of zeros in fastest step (sets maximum speed allowed)
-N = 8;         % # of repititions at each accel/deccel speed
-speedStep = 2; % # of zeros to add between each accel/deccel speed increment
+Slow = 20;      % # of zeros in slowest step (sets start and end speed of movement)
+Fast = 9;      % # of zeros in fastest step (sets maximum speed allowed)
+N = 4;         % # of repititions at each accel/deccel speed
+speedStep = 1; % # of zeros to add between each accel/deccel speed increment
 
 %% Create step triggers
 
@@ -68,7 +68,6 @@ steps = repmat([1;zeros(Fast,1)],numStepsMiddle,1);     % create vector for bar 
 
 % Create final trigger vector
 stepTriggers = cat(1,0,accel,zeros(Fast,1),steps,deccel,0); % create final vector to move bar
-
 
 %% Create output
 triggers = zeros(numel(stepTriggers), numOutPorts);

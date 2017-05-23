@@ -948,7 +948,7 @@ end
 end
 
 function updateTrialTable(gd)
-if gd.Run.run.Value || isempty(gd.Stimuli.list.Data)
+if ismember(gd.Run.run.String,{'Stop','Stopping...'}) || isempty(gd.Stimuli.list.Data)
     return
 end
 numStimuli = size(gd.Stimuli.list.Data,1);   % determine # of stimuli
@@ -1026,7 +1026,7 @@ if hObject.Value
         %% Initialize button
         hObject.BackgroundColor = [0,0,0];
         hObject.ForegroundColor = [1,1,1];
-        hObject.String = 'Stop';
+        hObject.String = 'Starting...';
         
         %% Set parameters
         
@@ -1260,7 +1260,7 @@ if hObject.Value
         numBlock = 0;
         BlockShuffle = Experiment.params.blockShuffle;
         currentTrial = 0;
-        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
+        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', [], 'numRandomScansPost', []);
         Stimulus = Experiment.Stimulus;
         ExperimentReachedEnd = -1; % boolean to see if max trials has been reached
         
@@ -1336,6 +1336,7 @@ if hObject.Value
        
         
         %% Start Experiment
+        hObject.String = 'Stop';
         
         % Start imaging
         if strcmp(Experiment.imaging.ImagingType, 'sbx')
@@ -1545,11 +1546,13 @@ end
     function QueueData(src,eventdata)
         
         if ~Started % imaging system hasn't started yet, queue one "blank" trial
-            DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
-            BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
-            if saveOut
-                numDelayScans = numDelayScans + 2*DAQ.NotifyWhenScansQueuedBelow;
-                save(SaveFile, 'numDelayScans', '-append');
+            if hObject.Value
+                DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
+                BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
+                if saveOut
+                    numDelayScans = numDelayScans + 2*DAQ.NotifyWhenScansQueuedBelow;
+                    save(SaveFile, 'numDelayScans', '-append');
+                end
             end
             return
         end
@@ -1626,9 +1629,11 @@ end
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
             ExperimentReachedEnd = true;
-            TrialInfo.numRandomScansPost(currentTrial) = TrialInfo.numRandomScansPost(currentTrial) + 2*DAQ.NotifyWhenScansQueuedBelow;
-            if saveOut
-                save(SaveFile, 'TrialInfo', '-append');
+            if currentTrial>0
+                TrialInfo.numRandomScansPost(currentTrial) = TrialInfo.numRandomScansPost(currentTrial) + 2*DAQ.NotifyWhenScansQueuedBelow;
+                if saveOut
+                    save(SaveFile, 'TrialInfo', '-append');
+                end
             end
             
         else % experiment is complete -> don't queue more scans
