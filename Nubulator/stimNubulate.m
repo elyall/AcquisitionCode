@@ -5,6 +5,8 @@ function [TrialInfo, SaveFile] = stimNubulate(SaveFile, varargin)
 gd.Internal.ImagingType = 'sbx';                % 'sbx' or 'scim'
 gd.Internal.ImagingComp.ip = '128.32.173.30';   % SCANBOX ONLY: for UDP
 gd.Internal.ImagingComp.port = 7000;            % SCANBOX ONLY: for UDP
+gd.Internal.wt.ip = '128.32.19.135';            % whisker tracking comp
+gd.Internal.wt.port = 55000;                    % whisker tracking comp
 
 Display.units = 'pixels';
 Display.position = [400, 400, 1400, 600];
@@ -1044,7 +1046,7 @@ if hObject.Value
         currentTrial = 0;
         TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', []);
         Stimulus = Experiment.Stimulus;
-        ExperimentReachedEnd = false; % boolean to see if max trials has been reached
+        ExperimentReachedEnd = -1; % boolean to see if max trials has been reached
         
         % Estimating time remaining
         timeObj = gd.Run.estTime;
@@ -1092,13 +1094,19 @@ if hObject.Value
         
         % Variables for displaying stim info
         numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
-        BufferStim = zeros(numBufferScans, 1);
+        BufferStim = zeros(numBufferScans, 1); % initialize with blank trial for plotting run speed at beginning
         
         % Variables for determing if mouse was running
         RepeatBadTrials = Experiment.params.repeatBadTrials;
         SpeedThreshold = Experiment.params.speedThreshold;
         RunIndex = 1;
         
+        % Variables for whisker tracking
+        WhiskerTracking = Experiment.params.whiskerTracking;
+        if WhiskerTracking
+            WTUDP = udp(gd.Internal.wt.ip,gd.Internal.wt.port);
+            fopen(WTUDP);
+        end
         
         %% Initialize saving
         if saveOut
@@ -1134,10 +1142,8 @@ if hObject.Value
         
         % Scanbox only: stop imaging
         if strcmp(Experiment.imaging.ImagingType, 'sbx')
-%             if ~strcmp(ImagingMode,'Trial Imaging')
-                fprintf(H_Scanbox,'S'); % stop imaging
-%             end
-            fclose(H_Scanbox);          % close connection
+            fprintf(H_Scanbox,'S'); % stop imaging
+            fclose(H_Scanbox);      % close connection
         end
         
         % If saving: append stop time, close file, & increment file index
@@ -1148,11 +1154,16 @@ if hObject.Value
             CreateFilename(gd.Saving.FullFilename, [], gd); % update filename for next experiment
         end
         
+        % Close connections
+        if WhiskerTracking
+            fclose(WTUDP);
+        end
+        
         % Text user
         if gd.Run.textUser.Value
             send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('Experiment finished at %s',Experiment.timing.finish(end-7:end)));
         end
-
+        
         % Reset GUI
         estimateExpTime(gd);
         hObject.Value = false;
@@ -1162,15 +1173,20 @@ if hObject.Value
         
     catch ME
         warning('Running experiment failed');
- 
+        
         % Close any open connections
-        try
-            if strcmp(ImagingType, 'sbx')
+        if strcmp(ImagingType, 'sbx')
+            try
                 fprintf(H_Scanbox,'S'); %stop
                 fclose(H_Scanbox);
             end
         end
-        clear DAQ H_Scanbox
+        if WhiskerTracking
+            try
+                fclose(WTUDP);
+            end
+        end
+        clear DAQ H_Scanbox WTUDP
         
         % Text user
         if gd.Run.textUser.Value
@@ -1208,11 +1224,10 @@ end
         % If experiment hasn't started, determine whether to start experiment
         if ~Started                                       % experiment hasn't started
             if DelayTimer                                   % delay timer started previously 
-                currentTime = toc(DelayTimer);
-                if currentTime>=Delay                           % requested delay time has been reached
+                if toc(DelayTimer)>=Delay                           % requested delay time has been reached
                     Started = true;                               	% start experiment
                 else
-                    timeObj.String = sprintf('Est time: %.1f min',(timeObj.UserData-currentTime)/60);
+                    timeObj.String = sprintf('Est time: %.1f min',(timeObj.UserData-toc(DelayTimer))/60);
                 end
             elseif any(eventdata.Data(:,FrameChannelIndex)) % first frame trigger received
                 if Delay                                    % delay requested
@@ -1225,7 +1240,7 @@ end
         
         % Refresh buffer
         DataInBuffer = cat(1, DataInBuffer(numScansReturned+1:end,:), eventdata.Data(:,RunChannelIndices));   % concatenate new data and remove old data
-        BufferStim = BufferStim(numScansReturned+1:end);
+        BufferStim = BufferStim(numScansReturned+1:end); % remove corresponding old data from stimulus buffer
         
         % Convert entire buffer of pulses to run speed
         Data = [0;diff(DataInBuffer(:,1))>0];       % gather pulses' front edges
@@ -1260,10 +1275,10 @@ end
         % Record average running speed during stimulus period
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
             numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,4) = numTrialsObj.Data(TrialInfo.StimID(RunIndex)==StimIDs,4) - 1; % update # queued for given stimulus
-
-            % Trial Imaging mode: stop recording data
-            if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
-                fprintf(H_Scanbox,'S'); % stop recording
+            
+            % Whisker tracking: save data to file
+            if WhiskerTracking
+                fprintf(WTUDP,'S');
             end
             
             % Calculate mean running speed
@@ -1292,20 +1307,13 @@ end
                 save(SaveFile, 'TrialInfo', '-append');
             end
             
-            % Trial Imaging mode: start recording data
-            if strcmp(ImagingMode,'Trial Imaging') && strcmp(ImagingType,'sbx')
-                fprintf(H_Scanbox,'G'); % start recording
-            end
-            
-%         elseif strcmp(ImagingMode,'Trial Imaging') && any(diff(BufferStim(numBufferScans+1:numBufferScans+numScansBaseline)) == RunIndex) && strcmp(ImagingType,'sbx') % next stimulus starts within window
-%             fprintf(H_Scanbox,'G'); % start recording
         end %analyze last trial
         
     end %SaveDateIn
 
 %% Callback: QueueOutputData
     function QueueData(src,eventdata)
-                
+        
         if ~Started % imaging system hasn't started yet, queue one "blank" trial
             DAQ.queueOutputData(zeros(2*DAQ.NotifyWhenScansQueuedBelow, numel(OutChannels)));
             BufferStim = cat(1, BufferStim, zeros(2*DAQ.NotifyWhenScansQueuedBelow, 1));
@@ -1343,7 +1351,7 @@ end
             % Determine StimID of stimulus to queue
             TrialInfo.StimID(currentTrial) = Block(blockIndex);
             
-            % Create triggers
+            % Determine triggers
             CurrentTriggers = BaseTriggers;
             if TrialInfo.StimID(currentTrial) ~= 0 % current trial is not control trial
                 CurrentTriggers(:,PistonCombinations(TrialInfo.StimID(currentTrial),:)) = repmat(PistonTrigger, 1, sum(PistonCombinations(TrialInfo.StimID(currentTrial),:)));
@@ -1380,7 +1388,7 @@ end
             
         else % experiment is complete -> don't queue more scans
             if ~hObject.Value
-                fprintf('\nComplete: finished %d trial(s) (user quit)\n', currentTrial);  
+                fprintf('\nComplete: finished %d trial(s) (user quit)\n', currentTrial);
             else
                 fprintf('\nComplete: finished %d trials(s) (max trials reached)\n', currentTrial);
             end
@@ -1476,4 +1484,3 @@ if strcmp(mail,'matlabsendtextmessage@gmail.com')
     disp('after the bulky comments.')
 end
 end
-
