@@ -254,7 +254,6 @@ gd.Parameters.imagingMode = uicontrol(...
     'String',               'Constant Imaging',...
     'Parent',               gd.Parameters.panel,...
     'Units',                'normalized',...
-    'Enable',               'off',... % temporary
     'Position',             [0,.8,w1,.1],...
     'UserData',             {[.94,.94,.94;1,1,1],'Constant Imaging','Trial Imaging'},...
     'Callback',             @(hObject,eventdata)set(hObject,'BackgroundColor',hObject.UserData{1}(hObject.Value+1,:),'String',hObject.UserData{hObject.Value+2}));
@@ -912,7 +911,7 @@ if hObject.Value
         
         % Imaging Computer Trigger (for timing)
         [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
-        DAQ.Channels(id).Name = 'O_2PTrigger';
+        DAQ.Channels(id).Name = 'O_EventTrigger';
         [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
         DAQ.Channels(id).Name = 'I_FrameCounter'; 
         
@@ -922,6 +921,12 @@ if hObject.Value
             DAQ.Channels(id(1)).Name = 'I_RunWheelA';
             DAQ.Channels(id(2)).Name = 'I_RunWheelB';
             DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
+        end
+        
+        % Trial Imaging
+        if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
+            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line19','OutputOnly');
+            DAQ.Channels(id).Name = 'O_ImagingTrigger';
         end
         
         % Whisker tracking
@@ -995,8 +1000,15 @@ if hObject.Value
         % Adjust Callback timing so next trial is queued right after previous trial starts
         DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
         
-        % Trigger imaging computer on every single trial
-        Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels, 'O_2PTrigger')) = 1; % trigger at beginning and end of stimulus
+        % Trigger imaging computer at start and stop of stimulus
+        Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels, 'O_EventTrigger')) = 1; % trigger at beginning and end of stimulus
+        
+        % Trigger start & stop imaging
+        if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
+            delay = min(.5*Experiment.params.samplingFrequency,startTrig); % half a second between imaging (if no random ITI) or start of stimulus if that comes sooner
+            % dur = Experiment.params.samplingFrequency/100-1; % min 1msec pulse
+            Experiment.Triggers([delay, endTrig], strcmp(OutChannels, 'O_ImagingTrigger')) = 1;
+        end
         
         % Trigger whisker tracking camera on every single trial
         if Experiment.params.whiskerTracking
