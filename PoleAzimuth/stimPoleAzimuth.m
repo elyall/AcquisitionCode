@@ -11,7 +11,7 @@ gd.Internal.wt.port = 55000;                    % whisker tracking comp
 Display.units = 'pixels';
 Display.position = [400, 400, 1400, 600];
 
-gd.Internal.save.path = 'C:\Users\Resonant-2\OneDrive\StimData';
+gd.Internal.save.path = 'C:\Users\Resonant-2\Documents\Evan';
 if ~isdir(gd.Internal.save.path)
     gd.Internal.save.path = cd;
 end
@@ -1118,8 +1118,6 @@ if hObject.Value
         if Experiment.params.whiskerTracking
             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line17','OutputOnly');
             DAQ.Channels(id).Name = 'O_WhiskerTracker';
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line2','OutputOnly');
-            DAQ.Channels(id).Name = 'O_WhiskerIllumination';
             [~,id] = DAQ.addDigitalChannel('Dev1','port0/line18','InputOnly');
             DAQ.Channels(id).Name = 'I_WhiskerTracker';
         end
@@ -1217,20 +1215,10 @@ if hObject.Value
         
         % Trigger whisker tracking camera on every single trial
         if Experiment.params.whiskerTracking
-            if Experiment.timing.ITI >= 0.01
-                if ~gd.Parameters.wtType.Value	% single trigger per frame
-                    Experiment.Triggers(startTrig:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
-                else                            % single trigger per trial
-                    Experiment.Triggers(startTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
-                end
-                Experiment.Triggers(startTrig-ceil(DAQ.Rate/100):endTrig, strcmp(OutChannels,'O_WhiskerIllumination')) = 1; % start LED a little before the start of imaging
-            else % ITI is too short for LED to turn on and off
-                if ~gd.Parameters.wtType.Value	% single trigger per frame
-                    Experiment.Triggers(1:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during entire time
-                else                            % single trigger per trial
-                    Experiment.Triggers(startTrig) = 1; % image during stimulus period
-                end
-                Experiment.Triggers(:, strcmp(OutChannels,'O_WhiskerIllumination')) = 1; % image during entire time
+            if ~gd.Parameters.wtType.Value	% single trigger per frame
+                Experiment.Triggers(startTrig:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
+            else                            % single trigger per trial
+                Experiment.Triggers(startTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
             end
         end
         
@@ -1505,7 +1493,7 @@ end
             
             % Whisker tracking: save data to file
             if WhiskerTracking
-                fprintf(WTUDP,'S');
+                fprintf(WTUDP,'%d',RunIndex+1);
             end
             
             % Calculate mean running speed
