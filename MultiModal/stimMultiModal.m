@@ -1053,7 +1053,7 @@ if hObject.Value
         Experiment.stim.numPerBlock = cell2mat(gd.Stimuli.list.Data(:,2));
         
         Experiment.stim.setup = cell2table(gd.Stimuli.ports.Data(:,1:3),'VariableNames',{'Name','Port','Active'});
-        ActiveStims = unique([Experiment.stim.pistonCombinations{:}]);        % determine active stims
+        ActiveStims = unique([Experiment.stim.combinations{:}]);        % determine active stims
         Experiment.stim.setup.Active(1:size(Experiment.stim.setup,1)) = false;
         Experiment.stim.setup.Active(ActiveStims) = true;                     % set requested stims as active
         
@@ -1134,22 +1134,16 @@ if hObject.Value
         % Add ports
         
         % Puff
-        if Experiment.stim.setup.Active(1)
-            [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port{1},'OutputOnly');
-            DAQ.Channels(id).Name = strcat('O_Puff');
-        end
+        [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port{1},'OutputOnly');
+        DAQ.Channels(id).Name = strcat('O_Puff');
         
         % LED
-        if Experiment.stim.setup.Active(2)
-            [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port{2},'OutputOnly');
-            DAQ.Channels(id).Name = strcat('O_LED');
-        end
+        [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port{2},'OutputOnly');
+        DAQ.Channels(id).Name = strcat('O_LED');
         
         % Sound
-        if Experiment.stim.setup.Active(3)
-            [~,id] = DAQ.addAnalogOutputChannel('Dev1',str2double(Experiment.stim.setup.Port{3}),'Voltage');
-            DAQ.Channels(id).Name = strcat('O_LED');
-        end
+        [~,id] = DAQ.addAnalogOutputChannel('Dev1',str2double(Experiment.stim.setup.Port{3}),'Voltage');
+        DAQ.Channels(id).Name = strcat('O_Sound');
         
         % Imaging Computer Trigger (for timing)
         [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
@@ -1206,23 +1200,12 @@ if hObject.Value
         
         % Determine stimulus IDs
         Experiment.StimID = str2num(gd.Run.numTrials.RowName);
-        numStimuli = numel(Experiment.StimID);
+        StimCombinations = Experiment.stim.combinations;
         if Experiment.params.catchTrials
             Experiment.stim.combinations = [{[]};Experiment.stim.combinations];
             Experiment.stim.numPerBlock = [Experiment.params.numCatchesPerBlock;Experiment.stim.numPerBlock];
         end
         
-%         % Create stim matrix
-%         Experiment.stim.stim = false(numStimuli,nnz(Experiment.stim.setup.Active));
-%         List = find(Experiment.stim.setup.Active);
-%         for index = 1:numStimuli
-%             Experiment.stim.stim(index,ismember(List,Experiment.stim.pistonCombinations{index})) = true;              % used for analysis
-%         end
-%         PistonCombinations = false(numStimuli-Experiment.params.catchTrials,numOutChannels);
-%         PistonDict = find(~cellfun(@isempty,strfind({DAQ.Channels(:).Name},'Piston')));
-%         for index = 1+Experiment.params.catchTrials:numStimuli
-%             PistonCombinations(index-Experiment.params.catchTrials,PistonDict(Experiment.stim.stim(index,:))) = true; % used for queueing
-%         end
         
         %% Create triggers
         
@@ -1232,12 +1215,40 @@ if hObject.Value
   
         % Initialize blank triggers
         Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numOutChannels);
-        
-        % Trigger pistons
         startTrig = max(floor(Experiment.params.samplingFrequency * Experiment.timing.ITI),1);    % start after ITI
         endTrig = Experiment.timing.numScansPerTrial-1;                                           % end on last trigger of trial
-        Experiment.PistonTrigger = zeros(Experiment.timing.numScansPerTrial, 1);
-        Experiment.PistonTrigger(startTrig:endTrig) = 1;
+        Experiment.StimTriggers = zeros(Experiment.timing.numScansPerTrial,3);
+        
+        % Puff
+        if Experiment.stim.setup.Active(1)
+            t = 1/Experiment.params.samplingFrequency:1/Experiment.params.samplingFrequency:Experiment.timing.stimDuration;
+            stim = square(2*pi*t*Experiment.stim.puffFreq);
+            stim(stim<0) = 0;
+            Experiment.StimTriggers(startTrig:endTrig,1) = stim;
+        end
+        
+        % LED
+        if Experiment.stim.setup.Active(2)
+            t = 1/Experiment.params.samplingFrequency:1/Experiment.params.samplingFrequency:Experiment.timing.stimDuration;
+            stim = square(2*pi*t*Experiment.stim.LEDFreq)*Experiment.stim.LEDVolt;
+            stim(stim<0) = 0;
+            Experiment.StimTriggers(startTrig:endTrig,2) = stim;
+        end
+        
+        % Sound
+        if Experiment.stim.setup.Active(3)
+            if ~Experiment.stim.soundRand
+                stim = wgn(endTrig-startTrig+1,1,Experiment.stim.soundPower);
+                Experiment.StimTriggers(startTrig:endTrig,3) = stim;
+                sound.rand = false;
+            else
+                sound.rand = true;
+                sound.start = startTrig;
+                sound.stop = endTrig;
+                sound.num = endTrig-startTrig+1;
+                sound.power = Experiment.stim.soundPower;
+            end
+        end
         
         % Adjust Callback timing so next trial is queued right after previous trial starts
         DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
@@ -1308,7 +1319,7 @@ if hObject.Value
         
         % Stim dependent variables
         BaseTriggers = Experiment.Triggers;
-        PistonTrigger = Experiment.PistonTrigger;
+        StimTriggers = Experiment.StimTriggers;
         
         % If adding random ITI
         if Experiment.params.randomITI
@@ -1429,7 +1440,7 @@ if hObject.Value
         warning('Running experiment failed');
         
         % Close any open connections
-        if strcmp(ImagingType, 'sbx')
+        if strcmp(Experiment.imaging.ImagingType, 'sbx')
             try
                 fprintf(H_Scanbox,'S'); %stop
                 fclose(H_Scanbox);
@@ -1510,21 +1521,6 @@ end
         currentStim = downsample(BufferStim(1:numBufferScans), dsamp);
         plot(hAxes, numBufferScans:-dsamp:1, dx_dt, 'b-', numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');
         ylim([-100,600]);
-        
-%         % Convert new data to run speed
-%         Data = [0;diff(DataInBuffer(end-numScansReturned-sw_len*dsamp+1:end,1))>0];       % gather pulses' front edges
-%         Data(all([Data,DataInBuffer(end-numScansReturned-sw_len*dsamp+1:end,2)],2)) = -1; % set backwards steps to be backwards
-%         Data = cumsum(Data);                                                        % convert pulses to counter data
-%         x_t = downsample(Data, dsamp);                                              % downsample data to speed up computation
-%         x_t = padarray(x_t, sw_len, 'replicate', 'post');                           % pad for convolution
-%         dx_dt = conv(x_t, d_smooth_win, 'same');                                    % perform convolution
-%         % dx_dt = dx_dt * 360/360;                                                  % convert to degrees (no need since 360 pulses per 360 degrees)
-%         RunBuffer = cat(1, RunBuffer(numRunScansReturned+1:end,:), dx_dt(sw_len+1:end-sw_len));
-%         
-%         % Display new data and stimulus info
-%         currentStim = downsample(BufferStim(1:numBufferScans), dsamp);
-%         plot(hAxes, numBufferScans:-dsamp:1, RunBuffer, 'b-', numBufferScans:-dsamp:1, 500*(currentStim>0), 'r-');
-%         ylim([-100,600]);
         
         % Record average running speed during stimulus period
         if any(diff(BufferStim(numBufferScans-numScansReturned:numBufferScans)) == -RunIndex) % stimulus ended during current DataIn call
@@ -1610,7 +1606,14 @@ end
             % Determine triggers
             CurrentTriggers = BaseTriggers;
             if TrialInfo.StimID(currentTrial) ~= 0 % current trial is not control trial
-                CurrentTriggers(:,PistonCombinations(TrialInfo.StimID(currentTrial),:)) = repmat(PistonTrigger, 1, sum(PistonCombinations(TrialInfo.StimID(currentTrial),:)));
+                if ~sound.rand || ~any(StimCombinations{TrialInfo.StimID(currentTrial)}==3)
+                    CurrentTriggers(:,StimCombinations{TrialInfo.StimID(currentTrial)}) = StimTriggers(:,StimCombinations{TrialInfo.StimID(currentTrial)});
+                else
+                    id = StimCombinations{TrialInfo.StimID(currentTrial)};
+                    id = id(id~=3);
+                    CurrentTriggers(:,id) = StimTriggers(:,id);
+                    CurrentTriggers(sound.start:sound.stop,3) = wgn(sound.num,1,sound.power);
+                end
             end
             
             % Queue triggers & update buffer
