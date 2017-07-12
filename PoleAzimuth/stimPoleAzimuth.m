@@ -1035,6 +1035,7 @@ if hObject.Value
         Experiment.stim.numPerBlock = gd.Stimuli.list.Data(:,3);
 
         Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
+        ImagingType = Experiment.imaging.ImagingType; % in case something breaks
         Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
         
         Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
@@ -1253,7 +1254,6 @@ if hObject.Value
         % Necessary variables
         numTrialsObj = gd.Run.numTrials;
         StimIDs = Experiment.StimID;
-        ImagingType = Experiment.imaging.ImagingType;
         ImagingMode = Experiment.imaging.ImagingMode;
         Block = [];
         blockIndex = 0;
