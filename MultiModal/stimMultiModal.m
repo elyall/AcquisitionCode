@@ -653,7 +653,7 @@ if gd.Experiment.params.blockShuffle
 end
 % Record velocity
 % if gd.Experiment.params.runSpeed % temporarily commented out
-    set(gd.Parameters.runSpeed,'Value',true,'String','Recording velocity','BackgroundColor',[0,1,0]);
+set(gd.Parameters.runSpeed,'Value',true,'String','Recording velocity','BackgroundColor',[0,1,0]);
 % end % temporarily commented out
 % Hold start
 if gd.Experiment.params.holdStart
@@ -868,7 +868,7 @@ function EditCombinations(hObject, eventdata, gd)
 combinations = str2num(hObject.String);
 combinations(~ismember(combinations,1:nnz([gd.Stimuli.ports.Data{:,3}]))) = []; % remove any pistons that are not active
 if isempty(combinations)
-	combinations = num2str(1:nnz([gd.Stimuli.ports.Data{:,3}]));
+    combinations = num2str(1:nnz([gd.Stimuli.ports.Data{:,3}]));
 end
 hObject.String = num2str(combinations);
 end
@@ -1003,7 +1003,7 @@ numBlocks = str2double(gd.Run.numBlocks.String);
 numTrials = numBlocks*numTrialsPerBlock;
 
 % Determine average duration of each trial
-trialDuration = str2double(gd.Parameters.stimDur.String) + str2double(gd.Parameters.ITI.String);  
+trialDuration = str2double(gd.Parameters.stimDur.String) + str2double(gd.Parameters.ITI.String);
 if gd.Parameters.randomITI.Value
     trialDuration = trialDuration + str2double(gd.Parameters.randomITImax.String)/2;
 end
@@ -1017,458 +1017,458 @@ end
 function RunExperiment(hObject, eventdata, gd)
 
 if hObject.Value
-    try
-        if isempty(gd.Stimuli.list.Data)
-            error('No stimulus loaded! Please load some stimuli.');
-        end
-        Experiment = gd.Experiment;
-        
-        %% Record date & time information
-        Experiment.timing.init = datestr(now);
-        
-        %% Determine filenames to save to
-        if gd.Saving.save.Value
-            saveOut = true;
-            if exist(Experiment.saving.SaveFile, 'file')
-                answer = questdlg(sprintf('File already exists! Continue?\n%s', Experiment.saving.SaveFile), 'Overwrite file?', 'Yes', 'No', 'No');
-                if strcmp(answer, 'No')
-                    hObject.Value = false;
-                    return
-                end
-            end
-            SaveFile = Experiment.saving.SaveFile;
-            Experiment.saving.DataFile = strcat(Experiment.saving.SaveFile(1:end-4), '.bin'); % bin file
-        else
-            saveOut = false;
-        end
-        
-        %% Initialize button
-        hObject.BackgroundColor = [0,0,0];
-        hObject.ForegroundColor = [1,1,1];
-        hObject.String = 'Stop';
-        
-        %% Set parameters
-
-        Experiment.stim.combinations = cellfun(@str2num,gd.Stimuli.list.Data(:,1),'UniformOutput',false);
-        Experiment.stim.numPerBlock = cell2mat(gd.Stimuli.list.Data(:,2));
-        
-        Experiment.stim.setup = cell2table(gd.Stimuli.ports.Data(:,1:3),'VariableNames',{'Name','Port','Active'});
-        ActiveStims = unique([Experiment.stim.combinations{:}]);        % determine active stims
-        Experiment.stim.setup.Active(1:size(Experiment.stim.setup,1)) = false;
-        Experiment.stim.setup.Active(ActiveStims) = true;                     % set requested stims as active
-        
-        if Experiment.stim.setup.Active(1)
-            Experiment.stim.puffFreq = str2double(gd.Controls.puffFreq.String);
-        else
-            Experiment.stim.puffFreq = false;
-        end
-        
-        if Experiment.stim.setup.Active(2)
-            Experiment.stim.LEDFreq = str2double(gd.Controls.LEDFreq.String);
-            Experiment.stim.LEDVolt = str2double(gd.Controls.LEDVolt.String);
-        else
-            Experiment.stim.LEDFreq = false;
-            Experiment.stim.LEDVolt = false;
-        end
-        
-        if Experiment.stim.setup.Active(3)
-            Experiment.stim.soundPower = str2double(gd.Controls.soundPower.String);
-            Experiment.stim.soundRand = gd.Controls.soundRand.Value;
-        else
-            Experiment.stim.soundPower = false;
-            Experiment.stim.soundRand = false;
-        end
-
-        Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
-        Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
-                
-        Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
-        
-        Experiment.timing.ITI = str2double(gd.Parameters.ITI.String);
-        
-        Experiment.params.randomITI = gd.Parameters.randomITI.Value;
-        if Experiment.params.randomITI
-            Experiment.timing.randomITImax = str2double(gd.Parameters.randomITImax.String);
-        else
-            Experiment.timing.randomITImax = false;
-        end
-        
-        Experiment.params.catchTrials = gd.Parameters.control.Value;
-        if Experiment.params.catchTrials
-            Experiment.params.numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
-        else
-            Experiment.params.numCatchesPerBlock = false;
-        end
-        
-        Experiment.params.repeatBadTrials = gd.Parameters.repeatBadTrials.Value;
-        if Experiment.params.repeatBadTrials
-            Experiment.params.speedThreshold = str2double(gd.Parameters.speedThreshold.String);
-        else
-            Experiment.params.speedThreshold = false;
-        end
-        
-        Experiment.params.whiskerTracking = gd.Parameters.whiskerTracking.Value;
-        if Experiment.params.whiskerTracking
-            Experiment.params.frameRateWT = str2double(gd.Parameters.wtFrameRate.String);
-            Experiment.params.WTtype = gd.Parameters.wtType.String;
-        else
-            Experiment.params.frameRateWT = false;
-            Experiment.params.WTtype = false;
-        end
-        
-        Experiment.params.blockShuffle = gd.Parameters.shuffle.Value;
-        
-        Experiment.params.runSpeed = gd.Parameters.runSpeed.Value;
-        
-        Experiment.params.holdStart = gd.Parameters.holdStart.Value;
-        Experiment.params.delay = str2double(gd.Parameters.delay.String);
-        
-        %% Initialize NI-DAQ session
-        gd.Internal.daq = [];
-        
-        DAQ = daq.createSession('ni');                  % initialize session
-        DAQ.IsContinuous = true;                        % set session to be continuous (call's 'DataRequired' listener)
-        DAQ.Rate = Experiment.params.samplingFrequency; % set sampling frequency
-        Experiment.params.samplingFrequency = DAQ.Rate; % the actual sampling frequency is rarely perfect from what is input
-        
-        % Add ports
-        
-        % Puff
-        [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port{1},'OutputOnly');
-        DAQ.Channels(id).Name = strcat('O_Puff');
-        
-        % LED
-        [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port{2},'OutputOnly');
-        DAQ.Channels(id).Name = strcat('O_LED');
-        
-        % Sound
-        [~,id] = DAQ.addAnalogOutputChannel('Dev1',str2double(Experiment.stim.setup.Port{3}),'Voltage');
-        DAQ.Channels(id).Name = strcat('O_Sound');
-        
-        % Imaging Computer Trigger (for timing)
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
-        DAQ.Channels(id).Name = 'O_EventTrigger';
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
-        DAQ.Channels(id).Name = 'I_FrameCounter'; 
-        
-        % Running Wheel
-        if Experiment.params.runSpeed
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
-            DAQ.Channels(id(1)).Name = 'I_RunWheelA';
-            DAQ.Channels(id(2)).Name = 'I_RunWheelB';
-            DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
-        end
-        
-        % Trial Imaging
-        if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line19','OutputOnly');
-            DAQ.Channels(id).Name = 'O_ImagingTrigger';
-        end
-        
-        % Whisker tracking
-        if Experiment.params.whiskerTracking
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line17','OutputOnly');
-            DAQ.Channels(id).Name = 'O_WhiskerTracker';
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line2','OutputOnly');
-            DAQ.Channels(id).Name = 'O_WhiskerIllumination';
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line18','InputOnly');
-            DAQ.Channels(id).Name = 'I_WhiskerTracker';
-        end
-        
-        % Cleanup
-        DAQChannels = {DAQ.Channels(:).Name};
-        OutChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'O_')));
-        numOutChannels = numel(OutChannels);
-        InChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'I_')));
-        
-        % Add clock
-        daqClock = daq.createSession('ni');
-        daqClock.addCounterOutputChannel('Dev1',0,'PulseGeneration');
-        clkTerminal = daqClock.Channels(1).Terminal;
-        daqClock.Channels(1).Frequency = DAQ.Rate;
-        daqClock.IsContinuous = true;
-        daqClock.startBackground;
-        DAQ.addClockConnection('External',['Dev1/' clkTerminal],'ScanClock');
-        
-        % Add Callbacks
-        DAQ.addlistener('DataRequired', @QueueData);    % create listener for queueing trials
-        DAQ.NotifyWhenScansQueuedBelow = DAQ.Rate-1; % queue more data when less than a second of data left
-        DAQ.addlistener('DataAvailable', @SaveDataIn);  % create listener for when data is returned
-        % DAQ.NotifyWhenDataAvailableExceeds = round(DAQ.Rate/100);
-        
-        %% Determine stimuli
-        
-        % Determine stimulus IDs
-        Experiment.StimID = str2num(gd.Run.numTrials.RowName);
-        StimCombinations = Experiment.stim.combinations;
-        if Experiment.params.catchTrials
-            Experiment.stim.combinations = [{[]};Experiment.stim.combinations];
-            Experiment.stim.numPerBlock = [Experiment.params.numCatchesPerBlock;Experiment.stim.numPerBlock];
-        end
-        
-        
-        %% Create triggers
-        
-        % Compute timing of each trial
-        Experiment.timing.trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
-        Experiment.timing.numScansPerTrial = ceil(Experiment.params.samplingFrequency * Experiment.timing.trialDuration);
-  
-        % Initialize blank triggers
-        Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numOutChannels);
-        startTrig = max(floor(Experiment.params.samplingFrequency * Experiment.timing.ITI),1);    % start after ITI
-        endTrig = Experiment.timing.numScansPerTrial-1;                                           % end on last trigger of trial
-        Experiment.StimTriggers = zeros(Experiment.timing.numScansPerTrial,3);
-        
-        % Puff
-        if Experiment.stim.setup.Active(1)
-            t = 1/Experiment.params.samplingFrequency:1/Experiment.params.samplingFrequency:Experiment.timing.stimDuration;
-            stim = square(2*pi*t*Experiment.stim.puffFreq);
-            stim(stim<0) = 0;
-            Experiment.StimTriggers(startTrig:endTrig,1) = stim;
-        end
-        
-        % LED
-        if Experiment.stim.setup.Active(2)
-            t = 1/Experiment.params.samplingFrequency:1/Experiment.params.samplingFrequency:Experiment.timing.stimDuration;
-            stim = square(2*pi*t*Experiment.stim.LEDFreq)*Experiment.stim.LEDVolt;
-            stim(stim<0) = 0;
-            Experiment.StimTriggers(startTrig:endTrig,2) = stim;
-        end
-        
-        % Sound
-        if Experiment.stim.setup.Active(3)
-            if ~Experiment.stim.soundRand
-                stim = wgn(endTrig-startTrig+1,1,Experiment.stim.soundPower);
-                Experiment.StimTriggers(startTrig:endTrig,3) = stim;
-                sound.rand = false;
-            else
-                sound.rand = true;
-                sound.start = startTrig;
-                sound.stop = endTrig;
-                sound.num = endTrig-startTrig+1;
-                sound.power = Experiment.stim.soundPower;
+    %     try
+    if isempty(gd.Stimuli.list.Data)
+        error('No stimulus loaded! Please load some stimuli.');
+    end
+    Experiment = gd.Experiment;
+    
+    %% Record date & time information
+    Experiment.timing.init = datestr(now);
+    
+    %% Determine filenames to save to
+    if gd.Saving.save.Value
+        saveOut = true;
+        if exist(Experiment.saving.SaveFile, 'file')
+            answer = questdlg(sprintf('File already exists! Continue?\n%s', Experiment.saving.SaveFile), 'Overwrite file?', 'Yes', 'No', 'No');
+            if strcmp(answer, 'No')
+                hObject.Value = false;
+                return
             end
         end
-        
-        % Adjust Callback timing so next trial is queued right after previous trial starts
-        DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
-        
-        % Trigger imaging computer at start and stop of stimulus
-        Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels, 'O_EventTrigger')) = 1; % trigger at beginning and end of stimulus
-        
-        % Trigger start & stop imaging
-        if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
-            delay = min(.5*Experiment.params.samplingFrequency,startTrig); % half a second between imaging (if no random ITI) or start of stimulus if that comes sooner
-            % dur = Experiment.params.samplingFrequency/100-1; % min 1msec pulse
-            Experiment.Triggers([delay, endTrig], strcmp(OutChannels, 'O_ImagingTrigger')) = 1;
-        end
-        
-        % Trigger whisker tracking camera on every single trial
-        if Experiment.params.whiskerTracking
-            if Experiment.timing.ITI >= 0.01
-                if ~gd.Parameters.wtType.Value	% single trigger per frame
-                    Experiment.Triggers(startTrig:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
-                else                            % single trigger per trial
-                    Experiment.Triggers(startTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
-                end
-                Experiment.Triggers(startTrig-ceil(DAQ.Rate/100):endTrig, strcmp(OutChannels,'O_WhiskerIllumination')) = 1; % start LED a little before the start of imaging
-            else % ITI is too short for LED to turn on and off
-                if ~gd.Parameters.wtType.Value	% single trigger per frame
-                    Experiment.Triggers(1:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during entire time
-                else                            % single trigger per trial
-                    Experiment.Triggers(startTrig) = 1; % image during stimulus period
-                end
-                Experiment.Triggers(:, strcmp(OutChannels,'O_WhiskerIllumination')) = 1; % image during entire time
-            end
-        end
-        
-        % Build up vector to display when stimulus is present
-        Experiment.Stimulus = zeros(size(Experiment.Triggers,1), 1);
-        Experiment.Stimulus(startTrig:endTrig) = 1;
-        
-        
-        %% Initialize imaging session (scanbox only)
-        if strcmp(Experiment.imaging.ImagingType, 'sbx')
-            H_Scanbox = udp(gd.Internal.ImagingComp.ip, 'RemotePort', gd.Internal.ImagingComp.port); % create udp port handle
-            fopen(H_Scanbox);
-            fprintf(H_Scanbox,sprintf('A%s',gd.Saving.base.String));
-            fprintf(H_Scanbox,sprintf('U%s',gd.Saving.depth.String));
-            fprintf(H_Scanbox,sprintf('E%s',gd.Saving.index.String));
-        end
-        
-        
-        %% Initialize shared variables (only share what's necessary)
-        
-        % Necessary variables
-        numTrialsObj = gd.Run.numTrials;
-        StimIDs = Experiment.StimID;
-        ImagingType = Experiment.imaging.ImagingType;
-        ImagingMode = Experiment.imaging.ImagingMode;
-        Block = [];
-        blockIndex = 0;
-        numBlock = 0;
-        BlockShuffle = Experiment.params.blockShuffle;
-        currentTrial = 0;
-        TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', [], 'numRandomScansPost', []);
-        Stimulus = Experiment.Stimulus;
-        ExperimentReachedEnd = -1; % boolean to see if max trials has been reached
-        
-        % Estimating time remaining
-        timeObj = gd.Run.estTime;
-        trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
-        
-        % Stim dependent variables
-        BaseTriggers = Experiment.Triggers;
-        StimTriggers = Experiment.StimTriggers;
-        
-        % If adding random ITI
-        if Experiment.params.randomITI
-            MaxRandomScans = floor(Experiment.timing.randomITImax*Experiment.params.samplingFrequency);
-            trialDuration = trialDuration + Experiment.timing.randomITImax/2;
-        else
-            MaxRandomScans = 0;
-        end
-        
-        % If delaying start
-        Delay = Experiment.params.delay;
-        DelayTimer = false;                                             % only necessary when Delay or HoldStart
-        FrameChannelIndex = find(strcmp(InChannels, 'I_FrameCounter')); % only necessary for HoldStart
-        if Delay || Experiment.params.holdStart
-            Started = false;
-        else
-            Started = true;
-        end
-        numDelayScans = 0;
-        
-        % Variables if saving input data
-        if saveOut
-            Precision = Experiment.saving.dataPrecision;
-        end
-        
-        % Variables for calculating and displaying running speed
-        RunChannelIndices = [find(strcmp(InChannels, 'I_RunWheelB')),find(strcmp(InChannels,'I_RunWheelA'))];
-        numBufferScans = gd.Internal.buffer.numTrials*Experiment.timing.numScansPerTrial;
-        DataInBuffer = zeros(numBufferScans, 2);
-        dsamp = gd.Internal.buffer.downSample;
-        dsamp_Fs = Experiment.params.samplingFrequency / dsamp;
-        smooth_win = gausswin(dsamp_Fs, 23.5/2);
-        smooth_win = smooth_win/sum(smooth_win);
-        sw_len = length(smooth_win);
-        d_smooth_win = [0;diff(smooth_win)]/(1/dsamp_Fs);
-        hAxes = gd.Run.runSpeedAxes;
-        
-        % Variables for displaying stim info
-        numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
-        BufferStim = zeros(numBufferScans, 1); % initialize with blank trial for plotting run speed at beginning
-        
-        % Variables for determing if mouse was running
-        RepeatBadTrials = Experiment.params.repeatBadTrials;
-        SpeedThreshold = Experiment.params.speedThreshold;
-        RunIndex = 1;
-        
-        % Variables for whisker tracking
-        WhiskerTracking = Experiment.params.whiskerTracking;
-        if WhiskerTracking
-            WTUDP = udp(gd.Internal.wt.ip,gd.Internal.wt.port);
-            fopen(WTUDP);
-        end
-        
-        %% Initialize saving
-        if saveOut
-            save(SaveFile, 'DAQChannels', 'Experiment', 'numDelayScans', '-mat', '-v7.3');
-            H_DataFile = fopen(Experiment.saving.DataFile, 'w');
-        end
-        
-        
-        %% Start Experiment
-        
-        % Start imaging
-        if strcmp(Experiment.imaging.ImagingType, 'sbx')
-            if ~strcmp(ImagingMode,'Trial Imaging')
-                fprintf(H_Scanbox,'G'); % start imaging
-            end
-        end
-        
-        % Start experiment
-        QueueData();                                % queue initial output triggers (blanks)
-        if ~Experiment.params.holdStart && Delay    % delay starts right away
-            DelayTimer = tic;                       % start delay timer
-        end
-        Experiment.timing.start = datestr(now);     % record time experiment started
-        DAQ.startBackground;                        % start experiment
-        
-        %% During Experiment
-        while DAQ.IsRunning                         % experiment hasn't ended yet
-            pause(1);                               % free up command line
-        end
-        Experiment.timing.finish = datestr(now);    % record time experiment ended
-        
-        %% End Experiment
-        
-        % Scanbox only: stop imaging
-        if strcmp(Experiment.imaging.ImagingType, 'sbx')
-            fprintf(H_Scanbox,'S'); % stop imaging
-            fclose(H_Scanbox);      % close connection
-        end
-        
-        % If saving: append stop time, close file, & increment file index
-        if saveOut
-            save(SaveFile, 'Experiment', '-append');        % update with "Experiment.timing.finish" info
-            fclose(H_DataFile);                             % close binary file
-            gd.Saving.index.String = sprintf('%03d',str2double(gd.Saving.index.String) + 1); % increment file index for next experiment
-            CreateFilename(gd.Saving.FullFilename, [], gd); % update filename for next experiment
-        end
-        
-        % Close connections
-        if WhiskerTracking
-            fclose(WTUDP);
-        end
-        
-        % Text user
-        if gd.Run.textUser.Value
-            send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('Experiment finished at %s',Experiment.timing.finish(end-7:end)));
-        end
-        
-        % Reset GUI
-        estimateExpTime(gd);
-        hObject.Value = false;
-        hObject.BackgroundColor = [.94,.94,.94];
-        hObject.ForegroundColor = [0,0,0];
-        hObject.String = 'Run';
-        
-    catch ME
-        warning('Running experiment failed');
-        
-        % Close any open connections
-        if strcmp(Experiment.imaging.ImagingType, 'sbx')
-            try
-                fprintf(H_Scanbox,'S'); %stop
-                fclose(H_Scanbox);
-            end
-        end
-        if WhiskerTracking
-            try
-                fclose(WTUDP);
-            end
-        end
-        clear DAQ H_Scanbox WTUDP
-        
-        % Text user
-        if gd.Run.textUser.Value
-            send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'','Experiment failed!');
-        end
-          
-        % Reset GUI
-        estimateExpTime(gd);
-        hObject.Value = false;
-        hObject.BackgroundColor = [.94,.94,.94];
-        hObject.ForegroundColor = [0,0,0];
-        hObject.String = 'Run';
-        
-        % Rethrow error
-        rethrow(ME);
+        SaveFile = Experiment.saving.SaveFile;
+        Experiment.saving.DataFile = strcat(Experiment.saving.SaveFile(1:end-4), '.bin'); % bin file
+    else
+        saveOut = false;
     end
     
+    %% Initialize button
+    hObject.BackgroundColor = [0,0,0];
+    hObject.ForegroundColor = [1,1,1];
+    hObject.String = 'Stop';
+    
+    %% Set parameters
+    
+    Experiment.stim.combinations = cellfun(@str2num,gd.Stimuli.list.Data(:,1),'UniformOutput',false);
+    Experiment.stim.numPerBlock = cell2mat(gd.Stimuli.list.Data(:,2));
+    
+    Experiment.stim.setup = cell2table(gd.Stimuli.ports.Data(:,1:3),'VariableNames',{'Name','Port','Active'});
+    ActiveStims = unique([Experiment.stim.combinations{:}]);        % determine active stims
+    Experiment.stim.setup.Active(1:size(Experiment.stim.setup,1)) = false;
+    Experiment.stim.setup.Active(ActiveStims) = true;                     % set requested stims as active
+    
+    if Experiment.stim.setup.Active(1)
+        Experiment.stim.puffFreq = str2double(gd.Controls.puffFreq.String);
+    else
+        Experiment.stim.puffFreq = false;
+    end
+    
+    if Experiment.stim.setup.Active(2)
+        Experiment.stim.LEDFreq = str2double(gd.Controls.LEDFreq.String);
+        Experiment.stim.LEDVolt = str2double(gd.Controls.LEDVolt.String);
+    else
+        Experiment.stim.LEDFreq = false;
+        Experiment.stim.LEDVolt = false;
+    end
+    
+    if Experiment.stim.setup.Active(3)
+        Experiment.stim.soundPower = str2double(gd.Controls.soundPower.String);
+        Experiment.stim.soundRand = gd.Controls.soundRand.Value;
+    else
+        Experiment.stim.soundPower = false;
+        Experiment.stim.soundRand = false;
+    end
+    
+    Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
+    Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
+    
+    Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
+    
+    Experiment.timing.ITI = str2double(gd.Parameters.ITI.String);
+    
+    Experiment.params.randomITI = gd.Parameters.randomITI.Value;
+    if Experiment.params.randomITI
+        Experiment.timing.randomITImax = str2double(gd.Parameters.randomITImax.String);
+    else
+        Experiment.timing.randomITImax = false;
+    end
+    
+    Experiment.params.catchTrials = gd.Parameters.control.Value;
+    if Experiment.params.catchTrials
+        Experiment.params.numCatchesPerBlock = str2double(gd.Parameters.controlNum.String);
+    else
+        Experiment.params.numCatchesPerBlock = false;
+    end
+    
+    Experiment.params.repeatBadTrials = gd.Parameters.repeatBadTrials.Value;
+    if Experiment.params.repeatBadTrials
+        Experiment.params.speedThreshold = str2double(gd.Parameters.speedThreshold.String);
+    else
+        Experiment.params.speedThreshold = false;
+    end
+    
+    Experiment.params.whiskerTracking = gd.Parameters.whiskerTracking.Value;
+    if Experiment.params.whiskerTracking
+        Experiment.params.frameRateWT = str2double(gd.Parameters.wtFrameRate.String);
+        Experiment.params.WTtype = gd.Parameters.wtType.String;
+    else
+        Experiment.params.frameRateWT = false;
+        Experiment.params.WTtype = false;
+    end
+    
+    Experiment.params.blockShuffle = gd.Parameters.shuffle.Value;
+    
+    Experiment.params.runSpeed = gd.Parameters.runSpeed.Value;
+    
+    Experiment.params.holdStart = gd.Parameters.holdStart.Value;
+    Experiment.params.delay = str2double(gd.Parameters.delay.String);
+    
+    %% Initialize NI-DAQ session
+    gd.Internal.daq = [];
+    
+    DAQ = daq.createSession('ni');                  % initialize session
+    DAQ.IsContinuous = true;                        % set session to be continuous (call's 'DataRequired' listener)
+    DAQ.Rate = Experiment.params.samplingFrequency; % set sampling frequency
+    Experiment.params.samplingFrequency = DAQ.Rate; % the actual sampling frequency is rarely perfect from what is input
+    
+    % Add ports
+    
+    % Puff
+    [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port{1},'OutputOnly');
+    DAQ.Channels(id).Name = strcat('O_Puff');
+    
+    % LED
+    [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port{2},'OutputOnly');
+    DAQ.Channels(id).Name = strcat('O_LED');
+    
+    % Sound
+    [~,id] = DAQ.addAnalogOutputChannel('Dev1',str2double(Experiment.stim.setup.Port{3}),'Voltage');
+    DAQ.Channels(id).Name = strcat('O_Sound');
+    
+    % Imaging Computer Trigger (for timing)
+    [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
+    DAQ.Channels(id).Name = 'O_EventTrigger';
+    [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
+    DAQ.Channels(id).Name = 'I_FrameCounter';
+    
+    % Running Wheel
+    if Experiment.params.runSpeed
+        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
+        DAQ.Channels(id(1)).Name = 'I_RunWheelA';
+        DAQ.Channels(id(2)).Name = 'I_RunWheelB';
+        DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
+    end
+    
+    % Trial Imaging
+    if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
+        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line19','OutputOnly');
+        DAQ.Channels(id).Name = 'O_ImagingTrigger';
+    end
+    
+    % Whisker tracking
+    if Experiment.params.whiskerTracking
+        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line17','OutputOnly');
+        DAQ.Channels(id).Name = 'O_WhiskerTracker';
+        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line2','OutputOnly');
+        DAQ.Channels(id).Name = 'O_WhiskerIllumination';
+        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line18','InputOnly');
+        DAQ.Channels(id).Name = 'I_WhiskerTracker';
+    end
+    
+    % Cleanup
+    DAQChannels = {DAQ.Channels(:).Name};
+    OutChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'O_')));
+    numOutChannels = numel(OutChannels);
+    InChannels = DAQChannels(~cellfun(@isempty,strfind(DAQChannels, 'I_')));
+    
+    % Add clock
+    daqClock = daq.createSession('ni');
+    daqClock.addCounterOutputChannel('Dev1',0,'PulseGeneration');
+    clkTerminal = daqClock.Channels(1).Terminal;
+    daqClock.Channels(1).Frequency = DAQ.Rate;
+    daqClock.IsContinuous = true;
+    daqClock.startBackground;
+    DAQ.addClockConnection('External',['Dev1/' clkTerminal],'ScanClock');
+    
+    % Add Callbacks
+    DAQ.addlistener('DataRequired', @QueueData);    % create listener for queueing trials
+    DAQ.NotifyWhenScansQueuedBelow = DAQ.Rate-1; % queue more data when less than a second of data left
+    DAQ.addlistener('DataAvailable', @SaveDataIn);  % create listener for when data is returned
+    % DAQ.NotifyWhenDataAvailableExceeds = round(DAQ.Rate/100);
+    
+    %% Determine stimuli
+    
+    % Determine stimulus IDs
+    Experiment.StimID = str2num(gd.Run.numTrials.RowName);
+    StimCombinations = Experiment.stim.combinations;
+    if Experiment.params.catchTrials
+        Experiment.stim.combinations = [{[]};Experiment.stim.combinations];
+        Experiment.stim.numPerBlock = [Experiment.params.numCatchesPerBlock;Experiment.stim.numPerBlock];
+    end
+    
+    
+    %% Create triggers
+    
+    % Compute timing of each trial
+    Experiment.timing.trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
+    Experiment.timing.numScansPerTrial = ceil(Experiment.params.samplingFrequency * Experiment.timing.trialDuration);
+    
+    % Initialize blank triggers
+    Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numOutChannels);
+    startTrig = max(floor(Experiment.params.samplingFrequency * Experiment.timing.ITI),1);    % start after ITI
+    endTrig = Experiment.timing.numScansPerTrial-1;                                           % end on last trigger of trial
+    Experiment.StimTriggers = zeros(Experiment.timing.numScansPerTrial,3);
+    
+    % Puff
+    if Experiment.stim.setup.Active(1)
+        t = 1/Experiment.params.samplingFrequency:1/Experiment.params.samplingFrequency:Experiment.timing.stimDuration;
+        stim = square(2*pi*t*Experiment.stim.puffFreq);
+        stim(stim<0) = 0;
+        Experiment.StimTriggers(startTrig:endTrig,1) = stim;
+    end
+    
+    % LED
+    if Experiment.stim.setup.Active(2)
+        t = 1/Experiment.params.samplingFrequency:1/Experiment.params.samplingFrequency:Experiment.timing.stimDuration;
+        stim = square(2*pi*t*Experiment.stim.LEDFreq)*Experiment.stim.LEDVolt;
+        stim(stim<0) = 0;
+        Experiment.StimTriggers(startTrig:endTrig,2) = stim;
+    end
+    
+    % Sound
+    if Experiment.stim.setup.Active(3)
+        if ~Experiment.stim.soundRand
+            stim = wgn(endTrig-startTrig+1,1,Experiment.stim.soundPower);
+            Experiment.StimTriggers(startTrig:endTrig,3) = stim;
+            sound.rand = false;
+        else
+            sound.rand = true;
+            sound.start = startTrig;
+            sound.stop = endTrig;
+            sound.num = endTrig-startTrig+1;
+            sound.power = Experiment.stim.soundPower;
+        end
+    end
+    
+    % Adjust Callback timing so next trial is queued right after previous trial starts
+    DAQ.NotifyWhenScansQueuedBelow = Experiment.timing.numScansPerTrial - startTrig;
+    
+    % Trigger imaging computer at start and stop of stimulus
+    Experiment.Triggers([startTrig, endTrig], strcmp(OutChannels, 'O_EventTrigger')) = 1; % trigger at beginning and end of stimulus
+    
+    % Trigger start & stop imaging
+    if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
+        delay = min(.5*Experiment.params.samplingFrequency,startTrig); % half a second between imaging (if no random ITI) or start of stimulus if that comes sooner
+        % dur = Experiment.params.samplingFrequency/100-1; % min 1msec pulse
+        Experiment.Triggers([delay, endTrig], strcmp(OutChannels, 'O_ImagingTrigger')) = 1;
+    end
+    
+    % Trigger whisker tracking camera on every single trial
+    if Experiment.params.whiskerTracking
+        if Experiment.timing.ITI >= 0.01
+            if ~gd.Parameters.wtType.Value	% single trigger per frame
+                Experiment.Triggers(startTrig:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
+            else                            % single trigger per trial
+                Experiment.Triggers(startTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
+            end
+            Experiment.Triggers(startTrig-ceil(DAQ.Rate/100):endTrig, strcmp(OutChannels,'O_WhiskerIllumination')) = 1; % start LED a little before the start of imaging
+        else % ITI is too short for LED to turn on and off
+            if ~gd.Parameters.wtType.Value	% single trigger per frame
+                Experiment.Triggers(1:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during entire time
+            else                            % single trigger per trial
+                Experiment.Triggers(startTrig) = 1; % image during stimulus period
+            end
+            Experiment.Triggers(:, strcmp(OutChannels,'O_WhiskerIllumination')) = 1; % image during entire time
+        end
+    end
+    
+    % Build up vector to display when stimulus is present
+    Experiment.Stimulus = zeros(size(Experiment.Triggers,1), 1);
+    Experiment.Stimulus(startTrig:endTrig) = 1;
+    
+    
+    %% Initialize imaging session (scanbox only)
+    if strcmp(Experiment.imaging.ImagingType, 'sbx')
+        H_Scanbox = udp(gd.Internal.ImagingComp.ip, 'RemotePort', gd.Internal.ImagingComp.port); % create udp port handle
+        fopen(H_Scanbox);
+        fprintf(H_Scanbox,sprintf('A%s',gd.Saving.base.String));
+        fprintf(H_Scanbox,sprintf('U%s',gd.Saving.depth.String));
+        fprintf(H_Scanbox,sprintf('E%s',gd.Saving.index.String));
+    end
+    
+    
+    %% Initialize shared variables (only share what's necessary)
+    
+    % Necessary variables
+    numTrialsObj = gd.Run.numTrials;
+    StimIDs = Experiment.StimID;
+    ImagingType = Experiment.imaging.ImagingType;
+    ImagingMode = Experiment.imaging.ImagingMode;
+    Block = [];
+    blockIndex = 0;
+    numBlock = 0;
+    BlockShuffle = Experiment.params.blockShuffle;
+    currentTrial = 0;
+    TrialInfo = struct('StimID', [], 'Running', [], 'RunSpeed', [], 'numRandomScansPost', []);
+    Stimulus = Experiment.Stimulus;
+    ExperimentReachedEnd = -1; % boolean to see if max trials has been reached
+    
+    % Estimating time remaining
+    timeObj = gd.Run.estTime;
+    trialDuration = Experiment.timing.stimDuration + Experiment.timing.ITI;
+    
+    % Stim dependent variables
+    BaseTriggers = Experiment.Triggers;
+    StimTriggers = Experiment.StimTriggers;
+    
+    % If adding random ITI
+    if Experiment.params.randomITI
+        MaxRandomScans = floor(Experiment.timing.randomITImax*Experiment.params.samplingFrequency);
+        trialDuration = trialDuration + Experiment.timing.randomITImax/2;
+    else
+        MaxRandomScans = 0;
+    end
+    
+    % If delaying start
+    Delay = Experiment.params.delay;
+    DelayTimer = false;                                             % only necessary when Delay or HoldStart
+    FrameChannelIndex = find(strcmp(InChannels, 'I_FrameCounter')); % only necessary for HoldStart
+    if Delay || Experiment.params.holdStart
+        Started = false;
+    else
+        Started = true;
+    end
+    numDelayScans = 0;
+    
+    % Variables if saving input data
+    if saveOut
+        Precision = Experiment.saving.dataPrecision;
+    end
+    
+    % Variables for calculating and displaying running speed
+    RunChannelIndices = [find(strcmp(InChannels, 'I_RunWheelB')),find(strcmp(InChannels,'I_RunWheelA'))];
+    numBufferScans = gd.Internal.buffer.numTrials*Experiment.timing.numScansPerTrial;
+    DataInBuffer = zeros(numBufferScans, 2);
+    dsamp = gd.Internal.buffer.downSample;
+    dsamp_Fs = Experiment.params.samplingFrequency / dsamp;
+    smooth_win = gausswin(dsamp_Fs, 23.5/2);
+    smooth_win = smooth_win/sum(smooth_win);
+    sw_len = length(smooth_win);
+    d_smooth_win = [0;diff(smooth_win)]/(1/dsamp_Fs);
+    hAxes = gd.Run.runSpeedAxes;
+    
+    % Variables for displaying stim info
+    numScansReturned = DAQ.NotifyWhenDataAvailableExceeds;
+    BufferStim = zeros(numBufferScans, 1); % initialize with blank trial for plotting run speed at beginning
+    
+    % Variables for determing if mouse was running
+    RepeatBadTrials = Experiment.params.repeatBadTrials;
+    SpeedThreshold = Experiment.params.speedThreshold;
+    RunIndex = 1;
+    
+    % Variables for whisker tracking
+    WhiskerTracking = Experiment.params.whiskerTracking;
+    if WhiskerTracking
+        WTUDP = udp(gd.Internal.wt.ip,gd.Internal.wt.port);
+        fopen(WTUDP);
+    end
+    
+    %% Initialize saving
+    if saveOut
+        save(SaveFile, 'DAQChannels', 'Experiment', 'numDelayScans', '-mat', '-v7.3');
+        H_DataFile = fopen(Experiment.saving.DataFile, 'w');
+    end
+    
+    
+    %% Start Experiment
+    
+    % Start imaging
+    if strcmp(Experiment.imaging.ImagingType, 'sbx')
+        if ~strcmp(ImagingMode,'Trial Imaging')
+            fprintf(H_Scanbox,'G'); % start imaging
+        end
+    end
+    
+    % Start experiment
+    QueueData();                                % queue initial output triggers (blanks)
+    if ~Experiment.params.holdStart && Delay    % delay starts right away
+        DelayTimer = tic;                       % start delay timer
+    end
+    Experiment.timing.start = datestr(now);     % record time experiment started
+    DAQ.startBackground;                        % start experiment
+    
+    %% During Experiment
+    while DAQ.IsRunning                         % experiment hasn't ended yet
+        pause(1);                               % free up command line
+    end
+    Experiment.timing.finish = datestr(now);    % record time experiment ended
+    
+    %% End Experiment
+    
+    % Scanbox only: stop imaging
+    if strcmp(Experiment.imaging.ImagingType, 'sbx')
+        fprintf(H_Scanbox,'S'); % stop imaging
+        fclose(H_Scanbox);      % close connection
+    end
+    
+    % If saving: append stop time, close file, & increment file index
+    if saveOut
+        save(SaveFile, 'Experiment', '-append');        % update with "Experiment.timing.finish" info
+        fclose(H_DataFile);                             % close binary file
+        gd.Saving.index.String = sprintf('%03d',str2double(gd.Saving.index.String) + 1); % increment file index for next experiment
+        CreateFilename(gd.Saving.FullFilename, [], gd); % update filename for next experiment
+    end
+    
+    % Close connections
+    if WhiskerTracking
+        fclose(WTUDP);
+    end
+    
+    % Text user
+    if gd.Run.textUser.Value
+        send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'',sprintf('Experiment finished at %s',Experiment.timing.finish(end-7:end)));
+    end
+    
+    % Reset GUI
+    estimateExpTime(gd);
+    hObject.Value = false;
+    hObject.BackgroundColor = [.94,.94,.94];
+    hObject.ForegroundColor = [0,0,0];
+    hObject.String = 'Run';
+    
+    %     catch ME
+    %         warning('Running experiment failed');
+    %
+    %         % Close any open connections
+    %         if strcmp(Experiment.imaging.ImagingType, 'sbx')
+    %             try
+    %                 fprintf(H_Scanbox,'S'); %stop
+    %                 fclose(H_Scanbox);
+    %             end
+    %         end
+    %         if WhiskerTracking
+    %             try
+    %                 fclose(WTUDP);
+    %             end
+    %         end
+    %         clear DAQ H_Scanbox WTUDP
+    %
+    %         % Text user
+    %         if gd.Run.textUser.Value
+    %             send_text_message(gd.Internal.textUser.number,gd.Internal.textUser.carrier,'','Experiment failed!');
+    %         end
+    %
+    %         % Reset GUI
+    %         estimateExpTime(gd);
+    %         hObject.Value = false;
+    %         hObject.BackgroundColor = [.94,.94,.94];
+    %         hObject.ForegroundColor = [0,0,0];
+    %         hObject.String = 'Run';
+    %
+    %         % Rethrow error
+    %         rethrow(ME);
+    %     end
+    %
 else % user quit experiment (hObject.Value = false)
     
     % Change button properties to reflect change in state
@@ -1488,7 +1488,7 @@ end
         
         % If experiment hasn't started, determine whether to start experiment
         if ~Started                                       % experiment hasn't started
-            if DelayTimer                                   % delay timer started previously 
+            if DelayTimer                                   % delay timer started previously
                 if toc(DelayTimer)>=Delay                           % requested delay time has been reached
                     Started = true;                               	% start experiment
                 else
@@ -1667,7 +1667,7 @@ function send_text_message(number,carrier,subject,message)
 %    'Nextel', 'Sprint', 'T-Mobile', 'Verizon', or 'Virgin'. SUBJECT is the
 %    subject of the message, and MESSAGE is the content of the message to
 %    send.
-% 
+%
 %    Example:
 %      send_text_message('234-567-8910','Cingular', ...
 %         'Calculation Done','Don't forget to retrieve your result file')
@@ -1676,7 +1676,7 @@ function send_text_message(number,carrier,subject,message)
 %
 %   See also SENDMAIL.
 %
-% You must modify the first two lines of the code (code inside the double 
+% You must modify the first two lines of the code (code inside the double
 % lines) before using.
 
 % Ke Feng, Sept. 2007
