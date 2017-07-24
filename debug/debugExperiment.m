@@ -63,4 +63,11 @@ if any(ismember(InputNames,'I_RunWheelA'))
         fprintf('\t\t''RunWheel'': NO running recorded\n');
     end
 end
-
+if any(ismember(InputNames,'I_WhiskerTracker'))
+    temp = DataIn(:,strcmp(InputNames,'I_WhiskerTracker'),1);
+    if any(temp)
+        fprintf('\t\t''I_WhiskerTracker'': %d frames recorded\n',nnz((temp-[0;temp(1:end-1)])>0));
+    else
+        fprintf('\t\t''I_WhiskerTracker'': NO frames recorded\n');
+    end
+end
