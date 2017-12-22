@@ -7,6 +7,7 @@ gd.Internal.ImagingComp.ip = '128.32.173.30';   % SCANBOX ONLY: for UDP
 gd.Internal.ImagingComp.port = 7000;            % SCANBOX ONLY: for UDP
 gd.Internal.wt.ip = '128.32.19.135';            % whisker tracking comp
 gd.Internal.wt.port = 55000;                    % whisker tracking comp
+gd.Internal.DAQ.ID = 'Dev2';
 
 Display.units = 'pixels';
 Display.position = [400, 400, 1400, 600];
@@ -1064,6 +1065,7 @@ if hObject.Value
         end
         
         Experiment.params.whiskerTracking = gd.Parameters.whiskerTracking.Value;
+        WhiskerTracking = Experiment.params.whiskerTracking;
         if Experiment.params.whiskerTracking
             Experiment.params.frameRateWT = str2double(gd.Parameters.wtFrameRate.String);
             Experiment.params.WTtype = gd.Parameters.wtType.String;
@@ -1090,20 +1092,20 @@ if hObject.Value
         % Add ports
         
         % Motor Rotation
-        [~,id] = DAQ.addAnalogOutputChannel('Dev1',0:1,'Voltage');
-        % [~,id] = DAQ.addDigitalChannel('Dev1','port0/line4:5','OutputOnly');
+        [~,id] = DAQ.addAnalogOutputChannel(gd.Internal.DAQ.ID,0:1,'Voltage');
+        % [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line4:5','OutputOnly');
         DAQ.Channels(id(1)).Name = 'O_MotorStep';
         DAQ.Channels(id(2)).Name = 'O_MotorDir';
         
         % Imaging Computer Trigger (for timing)
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line0','OutputOnly');
         DAQ.Channels(id).Name = 'O_EventTrigger';
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line1','InputOnly');
         DAQ.Channels(id).Name = 'I_FrameCounter';
         
         % Running Wheel
         if Experiment.params.runSpeed
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line5:7','InputOnly');
             DAQ.Channels(id(1)).Name = 'I_RunWheelA';
             DAQ.Channels(id(2)).Name = 'I_RunWheelB';
             DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
@@ -1111,15 +1113,15 @@ if hObject.Value
         
         % Trial Imaging
         if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line19','OutputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line19','OutputOnly');
             DAQ.Channels(id).Name = 'O_ImagingTrigger';
         end
         
         % Whisker tracking
         if Experiment.params.whiskerTracking
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line17','OutputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line17','OutputOnly');
             DAQ.Channels(id).Name = 'O_WhiskerTracker';
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line18','InputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line18','InputOnly');
             DAQ.Channels(id).Name = 'I_WhiskerTracker';
         end
         
@@ -1131,12 +1133,12 @@ if hObject.Value
         
 %         % Add clock
 %         daqClock = daq.createSession('ni');
-%         daqClock.addCounterOutputChannel('Dev1',0,'PulseGeneration');
+%         daqClock.addCounterOutputChannel(gd.Internal.DAQ.ID,0,'PulseGeneration');
 %         clkTerminal = daqClock.Channels(1).Terminal;
 %         daqClock.Channels(1).Frequency = DAQ.Rate;
 %         daqClock.IsContinuous = true;
 %         daqClock.startBackground;
-%         DAQ.addClockConnection('External',['Dev1/' clkTerminal],'ScanClock');
+%         DAQ.addClockConnection('External',[gd.Internal.DAQ.ID,'/' clkTerminal],'ScanClock');
         
         % Add Callbacks
         DAQ.addlistener('DataRequired', @QueueData);    % create listener for queueing trials
@@ -1321,7 +1323,6 @@ if hObject.Value
         RunIndex = 1;
         
         % Variables for whisker tracking
-        WhiskerTracking = Experiment.params.whiskerTracking;
         if WhiskerTracking
             WTUDP = udp(gd.Internal.wt.ip,gd.Internal.wt.port);
             fopen(WTUDP);

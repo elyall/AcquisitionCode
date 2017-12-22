@@ -27,9 +27,9 @@ elseif isequal(DAQ, true)
     DAQ = daq.createSession('ni'); % initialize session
     DAQ.Rate = samplingFrequency;
     if analog
-        [~,id] = DAQ.addAnalogOutputChannel('Dev1',0:1,'Voltage');
+        [~,id] = DAQ.addAnalogOutputChannel('Dev2',0:1,'Voltage');
     else
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line4:5','OutputOnly');
+        [~,id] = DAQ.addDigitalChannel('Dev2','port0/line4:5','OutputOnly');
     end
     DAQ.Channels(id(1)).Name = 'O_MotorStep';
     DAQ.Channels(id(2)).Name = 'O_MotorDir';

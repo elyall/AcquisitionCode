@@ -289,10 +289,10 @@ if hObject.Value
         
         % Add ports
         % Output port
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
+        [~,id] = DAQ.addDigitalChannel('Dev2','port0/line0','OutputOnly');
         DAQ.Channels(id).Name = 'O_2PTrigger';
         % Running Wheel
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
+        [~,id] = DAQ.addDigitalChannel('Dev2','port0/line5:7','InputOnly');
         DAQ.Channels(id(1)).Name = 'I_RunWheelA';
         DAQ.Channels(id(2)).Name = 'I_RunWheelB';
         DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
@@ -303,12 +303,12 @@ if hObject.Value
         
         % Add clock
         daqClock = daq.createSession('ni');
-        daqClock.addCounterOutputChannel('Dev1',0,'PulseGeneration');
+        daqClock.addCounterOutputChannel('Dev2',0,'PulseGeneration');
         clkTerminal = daqClock.Channels(1).Terminal;
         daqClock.Channels(1).Frequency = DAQ.Rate;
         daqClock.IsContinuous = true;
         daqClock.startBackground;
-        DAQ.addClockConnection('External',['Dev1/' clkTerminal],'ScanClock');
+        DAQ.addClockConnection('External',['Dev2/' clkTerminal],'ScanClock');
         
         % Add QueueData callback
         DAQ.addlistener('DataRequired', @QueueData); % create listener for queueing trials

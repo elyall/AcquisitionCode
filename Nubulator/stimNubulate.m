@@ -5,8 +5,9 @@ function [TrialInfo, SaveFile] = stimNubulate(SaveFile, varargin)
 gd.Internal.ImagingType = 'sbx';                % 'sbx' or 'scim'
 gd.Internal.ImagingComp.ip = '128.32.173.30';   % SCANBOX ONLY: for UDP
 gd.Internal.ImagingComp.port = 7000;            % SCANBOX ONLY: for UDP
-gd.Internal.wt.ip = '128.32.19.135';            % whisker tracking comp
+gd.Internal.wt.ip = '128.32.19.232';            % whisker tracking comp
 gd.Internal.wt.port = 55000;                    % whisker tracking comp
+gd.Internal.DAQ.ID = 'Dev2';
 
 Display.units = 'pixels';
 Display.position = [400, 400, 1400, 600];
@@ -24,19 +25,19 @@ gd.Experiment.saving.SaveFile = fullfile(gd.Internal.save.path, gd.Internal.save
 gd.Experiment.saving.DataFile = '';
 gd.Experiment.saving.dataPrecision = 'uint16';
 
-gd.Experiment.timing.stimDuration = 0.5;    % in seconds
-gd.Experiment.timing.ITI = 1.5;             % in seconds
-gd.Experiment.timing.randomITImax = 2;      % in seconds
+gd.Experiment.timing.stimDuration = 1;    % in seconds
+gd.Experiment.timing.ITI = 2;             % in seconds
+gd.Experiment.timing.randomITImax = 2;    % in seconds
 
 gd.Experiment.params.samplingFrequency = 30000;
-gd.Experiment.params.numBlocks = 5;             % positive integer: default # of blocks to present
+gd.Experiment.params.numBlocks = 20;            % positive integer: default # of blocks to present
 gd.Experiment.params.randomITI = false;         % booleon:          add on random time to ITI?
 gd.Experiment.params.catchTrials = true;        % booleon:          give control stimulus?
 gd.Experiment.params.numCatchesPerBlock = 1;    % positive integer: default # of catch trials to present per block
 gd.Experiment.params.repeatBadTrials = true;    % booleon:          repeat non-running trials
 gd.Experiment.params.speedThreshold = 100;      % positive scalar:  velocity threshold for good running trials (deg/s)
-gd.Experiment.params.whiskerTracking = false;   % booleon:          send triggers for whisker tracking camera?
-gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
+gd.Experiment.params.whiskerTracking = true;    % booleon:          send triggers for whisker tracking camera?
+gd.Experiment.params.frameRateWT = 300;         % positive scalar:  frame rate of whisker tracking
 gd.Experiment.params.WTtype = false;            %
 gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle block order each block?
 gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
@@ -53,7 +54,7 @@ gd.Internal.buffer.downSample = 20;
 
 % Stim dependent variables
 gd.Experiment.stim.setup = table(...
-    {'C1';'C2';'B1';'D1';'beta';'gamma';'';''},...
+    {'C1';'C2';'B1';'D1';'gamma';'beta';'';''},...
     {'port0/line8';'port0/line9';'port0/line10';'port0/line11';'port0/line12';'port0/line13';'port0/line14';'port0/line15'},...
     [true;true;true;true;true;false;false;false],...
     'VariableNames',{'Name','Port','Active'});
@@ -534,7 +535,7 @@ end
 
 try
     gd.Internal.daq = daq.createSession('ni');
-    gd.Internal.daq.addDigitalChannel('Dev1', gd.Experiment.stim.setup.Port, 'OutputOnly');
+    gd.Internal.daq.addDigitalChannel(gd.Internal.DAQ.ID, gd.Experiment.stim.setup.Port, 'OutputOnly');
 end
 CreateFilename(gd.Saving.FullFilename, [], gd);
 
@@ -634,7 +635,7 @@ function EditPorts(hObject, eventdata, gd)
 if eventdata.Indices(2)==2      % update DAQ
     gd.Internal.daq = [];
     gd.Internal.daq = daq.createSession('ni');
-    gd.Internal.daq.addDigitalChannel('Dev1', hObject.Data(:,2), 'OutputOnly');
+    gd.Internal.daq.addDigitalChannel(gd.Internal.DAQ.ID, hObject.Data(:,2), 'OutputOnly');
 elseif eventdata.Indices(2)==3  % update possible combinations
     gd.Stimuli.editCombinations.String = num2str(1:nnz([hObject.Data{:,3}]));
 elseif eventdata.Indices(2)==4  % output triggers (single port changed)
@@ -850,6 +851,7 @@ if hObject.Value
         Experiment.stim.setup.Active(ActivePistons) = true;                     % set requested pistons as active
         
         Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
+        ImagingType = Experiment.imaging.ImagingType; % in case something breaks
         Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
                 
         Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
@@ -878,6 +880,7 @@ if hObject.Value
         end
         
         Experiment.params.whiskerTracking = gd.Parameters.whiskerTracking.Value;
+        WhiskerTracking = Experiment.params.whiskerTracking;
         if Experiment.params.whiskerTracking
             Experiment.params.frameRateWT = str2double(gd.Parameters.wtFrameRate.String);
             Experiment.params.WTtype = gd.Parameters.wtType.String;
@@ -906,20 +909,20 @@ if hObject.Value
         % Add ports
         
         % Pistons
-        [~,id] = DAQ.addDigitalChannel('Dev1',Experiment.stim.setup.Port(Experiment.stim.setup.Active),'OutputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,Experiment.stim.setup.Port(Experiment.stim.setup.Active),'OutputOnly');
         for index = id
             DAQ.Channels(index).Name = strcat('O_Piston_',Experiment.stim.setup.Name{index});
         end
         
         % Imaging Computer Trigger (for timing)
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line0','OutputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line0','OutputOnly');
         DAQ.Channels(id).Name = 'O_EventTrigger';
-        [~,id] = DAQ.addDigitalChannel('Dev1','port0/line1','InputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line1','InputOnly');
         DAQ.Channels(id).Name = 'I_FrameCounter'; 
         
         % Running Wheel
         if Experiment.params.runSpeed
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line5:7','InputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line5:7','InputOnly');
             DAQ.Channels(id(1)).Name = 'I_RunWheelA';
             DAQ.Channels(id(2)).Name = 'I_RunWheelB';
             DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
@@ -927,15 +930,15 @@ if hObject.Value
         
         % Trial Imaging
         if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line19','OutputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line19','OutputOnly');
             DAQ.Channels(id).Name = 'O_ImagingTrigger';
         end
         
         % Whisker tracking
         if Experiment.params.whiskerTracking
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line17','OutputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line17','OutputOnly');
             DAQ.Channels(id).Name = 'O_WhiskerTracker';
-            [~,id] = DAQ.addDigitalChannel('Dev1','port0/line18','InputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line18','InputOnly');
             DAQ.Channels(id).Name = 'I_WhiskerTracker';
         end
         
@@ -947,12 +950,12 @@ if hObject.Value
         
         % Add clock
         daqClock = daq.createSession('ni');
-        daqClock.addCounterOutputChannel('Dev1',0,'PulseGeneration');
+        daqClock.addCounterOutputChannel(gd.Internal.DAQ.ID,0,'PulseGeneration');
         clkTerminal = daqClock.Channels(1).Terminal;
         daqClock.Channels(1).Frequency = DAQ.Rate;
         daqClock.IsContinuous = true;
         daqClock.startBackground;
-        DAQ.addClockConnection('External',['Dev1/' clkTerminal],'ScanClock');
+        DAQ.addClockConnection('External',[gd.Internal.DAQ.ID,'/',clkTerminal],'ScanClock');
         
         % Add Callbacks
         DAQ.addlistener('DataRequired', @QueueData);    % create listener for queueing trials
@@ -1039,7 +1042,6 @@ if hObject.Value
         % Necessary variables
         numTrialsObj = gd.Run.numTrials;
         StimIDs = Experiment.StimID;
-        ImagingType = Experiment.imaging.ImagingType;
         ImagingMode = Experiment.imaging.ImagingMode;
         Block = [];
         blockIndex = 0;
@@ -1104,7 +1106,6 @@ if hObject.Value
         RunIndex = 1;
         
         % Variables for whisker tracking
-        WhiskerTracking = Experiment.params.whiskerTracking;
         if WhiskerTracking
             WTUDP = udp(gd.Internal.wt.ip,gd.Internal.wt.port);
             fopen(WTUDP);
