@@ -7,7 +7,7 @@ gd.Internal.ImagingComp.ip = '128.32.173.30';   % SCANBOX ONLY: for UDP
 gd.Internal.ImagingComp.port = 7000;            % SCANBOX ONLY: for UDP
 gd.Internal.wt.ip = '128.32.19.232';            % whisker tracking comp
 gd.Internal.wt.port = 55000;                    % whisker tracking comp
-gd.Internal.DAQ.ID = 'Dev2';
+gd.Internal.DAQ.ID = 'Dev3';
 
 Display.units = 'pixels';
 Display.position = [400, 400, 1400, 600];

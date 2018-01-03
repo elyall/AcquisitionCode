@@ -2,12 +2,12 @@ function [TrialInfo, SaveFile] = stimPoleAzimuth(SaveFile, varargin)
 
 
 %% Configure Settings
-gd.Internal.ImagingType = 'scim';               % 'sbx' or 'scim'
+gd.Internal.ImagingType = 'sbx';                % 'sbx' or 'scim'
 gd.Internal.ImagingComp.ip = '128.32.173.30';   % SCANBOX ONLY: for UDP
 gd.Internal.ImagingComp.port = 7000;            % SCANBOX ONLY: for UDP
-gd.Internal.wt.ip = '128.32.19.135';            % whisker tracking comp
+gd.Internal.wt.ip = '128.32.19.232';            % whisker tracking comp
 gd.Internal.wt.port = 55000;                    % whisker tracking comp
-gd.Internal.DAQ.ID = 'Dev2';
+gd.Internal.DAQ.ID = 'Dev3';
 
 Display.units = 'pixels';
 Display.position = [400, 400, 1400, 600];
@@ -26,18 +26,18 @@ gd.Experiment.saving.DataFile = '';
 gd.Experiment.saving.dataPrecision = 'uint16';
 
 gd.Experiment.timing.stimDuration = 1.5;    % in seconds
-gd.Experiment.timing.ITI = 4.5;             % in seconds
+gd.Experiment.timing.ITI = 3.5;             % in seconds
 gd.Experiment.timing.randomITImax = 2;      % in seconds
 
 gd.Experiment.params.samplingFrequency = 30000;
-gd.Experiment.params.numBlocks = 5;             % positive integer: default # of blocks to present
+gd.Experiment.params.numBlocks = 2;             % positive integer: default # of blocks to present
 gd.Experiment.params.randomITI = false;         % booleon:          add on random time to ITI?
 gd.Experiment.params.catchTrials = true;        % booleon:          give control stimulus?
-gd.Experiment.params.numCatchesPerBlock = 1;    % positive integer: default # of catch trials to present per block
-gd.Experiment.params.repeatBadTrials = false;   % booleon:          repeat non-running trials
+gd.Experiment.params.numCatchesPerBlock = 15;   % positive integer: default # of catch trials to present per block
+gd.Experiment.params.repeatBadTrials = true;    % booleon:          repeat non-running trials
 gd.Experiment.params.speedThreshold = 100;      % positive scalar:  velocity threshold for good running trials (deg/s)
-gd.Experiment.params.whiskerTracking = false;   % booleon:          send triggers for whisker tracking camera?
-gd.Experiment.params.frameRateWT = 200;         % positive scalar:  frame rate of whisker tracking
+gd.Experiment.params.whiskerTracking = true;    % booleon:          send triggers for whisker tracking camera?
+gd.Experiment.params.frameRateWT = 300;         % positive scalar:  frame rate of whisker tracking
 gd.Experiment.params.WTtype = false;            %
 gd.Experiment.params.blockShuffle = true;       % booleon:          shuffle block order each block?
 gd.Experiment.params.runSpeed = true;           % booleon;          record rotary encoder's velocity? % temporarily commented out
@@ -264,7 +264,7 @@ gd.Stimuli.positionTable = uitable(...
     'ColumnEditable',       [true,true,true,true],...
     'ColumnFormat',         {'logical','numeric','numeric','numeric'},...
     'ColumnWidth',          {50,70,70,70},...
-    'Data',                 [{true;false},num2cell([zeros(2,1),[17.5;7.5],[8;4]])],...
+    'Data',                 [{true;true},num2cell([zeros(2,1),[18;10],[19;11]])],...
     'CellEditCallback',     @(hObject,eventdata)EditStimInputs(hObject, eventdata, guidata(hObject)));
 % stimuli list
 gd.Stimuli.list = uitable(...
