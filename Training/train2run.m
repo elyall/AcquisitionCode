@@ -9,6 +9,7 @@ Display.position = [100, 100, 800, 400];
 
 gd.Internal.save.path = fullfile(cd,datestr(now,'yymmdd'));
 gd.Internal.save.filename = '0000';
+gd.Internal.DAQ.ID = 'Dev2';
 
 gd.Experiment.saving.save = false;
 gd.Experiment.saving.SaveFile = fullfile(gd.Internal.save.path, gd.Internal.save.filename);
@@ -289,10 +290,10 @@ if hObject.Value
         
         % Add ports
         % Output port
-        [~,id] = DAQ.addDigitalChannel('Dev2','port0/line0','OutputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line0','OutputOnly');
         DAQ.Channels(id).Name = 'O_2PTrigger';
         % Running Wheel
-        [~,id] = DAQ.addDigitalChannel('Dev2','port0/line5:7','InputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line5:7','InputOnly');
         DAQ.Channels(id(1)).Name = 'I_RunWheelA';
         DAQ.Channels(id(2)).Name = 'I_RunWheelB';
         DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
@@ -303,12 +304,12 @@ if hObject.Value
         
         % Add clock
         daqClock = daq.createSession('ni');
-        daqClock.addCounterOutputChannel('Dev2',0,'PulseGeneration');
+        daqClock.addCounterOutputChannel(gd.Internal.DAQ.ID,0,'PulseGeneration');
         clkTerminal = daqClock.Channels(1).Terminal;
         daqClock.Channels(1).Frequency = DAQ.Rate;
         daqClock.IsContinuous = true;
         daqClock.startBackground;
-        DAQ.addClockConnection('External',['Dev2/' clkTerminal],'ScanClock');
+        DAQ.addClockConnection('External',[gd.Internal.DAQ.ID,'/',clkTerminal],'ScanClock');
         
         % Add QueueData callback
         DAQ.addlistener('DataRequired', @QueueData); % create listener for queueing trials
