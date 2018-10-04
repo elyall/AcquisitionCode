@@ -736,11 +736,11 @@ function [DAQ,Active] = initDAQ(hStimTable,Fs)
 StimTable = cell2table(hStimTable.Data,'VariableNames',{'Name','Port','Active','DAQ'});
 Active = StimTable.Active;
 DAQ = daq.createSession('ni');  % initialize session
-DAQ.Rate = Fs;                  % set sampling frequency
 for c = find(Active)'
     [~,id] = DAQ.addAnalogOutputChannel(StimTable.DAQ{c},StimTable.Port(c),'Voltage');
     DAQ.Channels(id).Name = strcat('O_Piezo_',StimTable.Name{id});
 end
+DAQ.Rate = Fs;                  % set sampling frequency
 end
 
 function EditPorts(hObject, eventdata, gd)
@@ -1074,6 +1074,7 @@ end
 function RunExperiment(hObject, eventdata, gd)
 
 if hObject.Value
+    ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value}; % in case something breaks
     try
         if isempty(gd.Stimuli.list.Data)
             error('No stimulus loaded! Please load some stimuli.');
@@ -1115,7 +1116,6 @@ if hObject.Value
         Experiment.stim.setup.Active(ActivePistons) = true;                     % set requested pistons as active
         
         Experiment.imaging.ImagingType = gd.Parameters.imagingType.String{gd.Parameters.imagingType.Value};
-        ImagingType = Experiment.imaging.ImagingType; % in case something breaks
         Experiment.imaging.ImagingMode = gd.Parameters.imagingMode.String;
                 
         Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
@@ -1213,7 +1213,7 @@ if hObject.Value
         
         % Add Callbacks
         DAQ.addlistener('DataRequired', @QueueData);    % create listener for queueing trials
-        DAQ.NotifyWhenScansQueuedBelow = DAQ.Rate-1; % queue more data when less than a second of data left
+        DAQ.NotifyWhenScansQueuedBelow = round(DAQ.Rate)-1; % queue more data when less than a second of data left
         DAQ.addlistener('DataAvailable', @SaveDataIn);  % create listener for when data is returned
         % DAQ.NotifyWhenDataAvailableExceeds = round(DAQ.Rate/100);
         
@@ -1444,8 +1444,8 @@ if hObject.Value
                 fclose(H_Scanbox);
             end
         end
-        if WhiskerTracking
-            try
+        try
+            if WhiskerTracking
                 fclose(WTUDP);
             end
         end
