@@ -7,7 +7,7 @@ gd.Internal.ImagingComp.ip = '128.32.173.30';   % SCANBOX ONLY: for UDP
 gd.Internal.ImagingComp.port = 7000;            % SCANBOX ONLY: for UDP
 gd.Internal.wt.ip = '128.32.19.232';            % whisker tracking comp
 gd.Internal.wt.port = 55000;                    % whisker tracking comp
-gd.Internal.DAQ.ID = 'Dev3';
+gd.Internal.DAQ.ID = 'Dev4';
 
 Display.units = 'pixels';
 Display.position = [400, 400, 1400, 600];
@@ -936,9 +936,11 @@ if hObject.Value
         
         % Whisker tracking
         if Experiment.params.whiskerTracking
-            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line17','OutputOnly');
+%             [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line17','OutputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line4','OutputOnly');
             DAQ.Channels(id).Name = 'O_WhiskerTracker';
-            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line18','InputOnly');
+%             [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line18','InputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line3','InputOnly');
             DAQ.Channels(id).Name = 'I_WhiskerTracker';
         end
         

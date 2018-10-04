@@ -278,11 +278,12 @@ function gd = initCamera(gd)
 if isfield(gd,'vid')
     delete(gd.vid);
 end
-if gd.gui.axes.format.Value == 1
-    gd.vid = videoinput('pointgrey', 1, 'F7_Mono8_1280x1024_Mode0');
-elseif gd.gui.axes.format.Value == 2
-    gd.vid = videoinput('pointgrey', 1, 'F7_Mono8_640x512_Mode1');
-end
+gd.vid = videoinput('pointgrey', 1, 'F7_Raw8_640x512_Mode1');
+% if gd.gui.axes.format.Value == 1
+%     gd.vid = videoinput('pointgrey', 1, 'F7_Mono8_1280x1024_Mode0');
+% elseif gd.gui.axes.format.Value == 2
+%     gd.vid = videoinput('pointgrey', 1, 'F7_Mono8_640x512_Mode1');
+% end
 gd.src = getselectedsource(gd.vid);
 gd.vid.ReturnedColorspace = 'grayscale';
 

@@ -27,7 +27,7 @@ elseif isequal(DAQ, true)
     DAQ = daq.createSession('ni'); % initialize session
     DAQ.Rate = samplingFrequency;
     if analog
-        [~,id] = DAQ.addAnalogOutputChannel('Dev2',0:1,'Voltage');
+        [~,id] = DAQ.addAnalogOutputChannel('Dev4',0:1,'Voltage');
     else
         [~,id] = DAQ.addDigitalChannel('Dev2','port0/line4:5','OutputOnly');
     end

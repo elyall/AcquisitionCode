@@ -9,7 +9,7 @@ Display.position = [100, 100, 800, 400];
 
 gd.Internal.save.path = fullfile(cd,datestr(now,'yymmdd'));
 gd.Internal.save.filename = '0000';
-gd.Internal.DAQ.ID = 'Dev3';
+gd.Internal.DAQ.ID = 'Dev4';
 
 gd.Experiment.saving.save = false;
 gd.Experiment.saving.SaveFile = fullfile(gd.Internal.save.path, gd.Internal.save.filename);
