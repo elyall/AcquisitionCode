@@ -7,7 +7,7 @@ gd.Internal.ImagingComp.ip = '128.32.173.30';   % SCANBOX ONLY: for UDP
 gd.Internal.ImagingComp.port = 7000;            % SCANBOX ONLY: for UDP
 gd.Internal.wt.ip = '128.32.19.232';            % whisker tracking comp
 gd.Internal.wt.port = 55000;                    % whisker tracking comp
-gd.Internal.DAQ.ID = {'Dev3','Dev4'};
+gd.Internal.DAQ.ID = {'Dev4','Dev5'};
 
 Display.units = 'pixels';
 Display.position = [400, 400, 1400, 600];
@@ -832,7 +832,7 @@ function ViewTriggers(hObject, eventdata, gd)
 if get(hObject,'Value')
     gd = refresh(gd); % update inputs
     Fs = gd.Experiment.params.samplingFrequency;
-    Triggers = generateTriggers(gd);
+    Triggers = generateTriggers(gd.Experiment);
     if isempty(gd.Internal.viewHandle) || ~ishghandle(gd.Internal.viewHandle) % figure doesn't exist
 %         pos = get(gd.fig,'OuterPosition');
 %         pos2 = get(gd.Stimuli2.panel,'Position');
@@ -871,7 +871,7 @@ if get(hObject,'Value')
         error('Requires at least one active piezo!');
     end
     
-    Triggers = generateTriggers(gd);
+    Triggers = generateTriggers(gd.Experiment);
     Triggers = repmat(Triggers(:,1),1,nnz(ActivePiezos));
     
     set(hObject,'String','Testing...'); drawnow;
@@ -890,26 +890,24 @@ end
 end
 
 % Generate Piezo triggers
-function Triggers = generateTriggers(gd)
-t = gd.Experiment.timing;
-s = gd.Experiment.stim;
-Fs = gd.Experiment.params.samplingFrequency;
+function Triggers = generateTriggers(Experiment)
+t = Experiment.timing;
+s = Experiment.stim;
+Fs = Experiment.params.samplingFrequency;
 Fr = 16; %gd.Experiment.imaging.frameRate;
 
 % Initialize Triggers
 trialDuration = t.stimDuration + t.ITI;
-numScansPerTrial = round(trialDuration*Fs);
-Triggers = zeros(numScansPerTrial,2);
+numScansPerTrial = ceil(trialDuration*Fs);
+Triggers = zeros(numScansPerTrial,1);
 
 % Build piezo triggers
 piezoTrigs = generatePiezoTrig(s.wailDuration, s.bidirectional, s.frequency, ceil(t.stimDuration*Fs), Fs);
 piezoTrigs = piezoTrigs*s.voltage; % scale to proper voltage
 startTrig = round(t.ITI*Fs)+1;
 endTrig = startTrig+numel(piezoTrigs)-1;
-Triggers(startTrig:endTrig,1) = piezoTrigs;
+Triggers(startTrig:endTrig) = piezoTrigs;
 
-% Add camera triggers
-Triggers(1:ceil(Fs/Fr):end,2) = 1;
 end
 
 function trig = generatePiezoTrig(duration, bidirectional, freq, numScans, Fs)
@@ -1111,7 +1109,7 @@ if hObject.Value
         Experiment.stim.pistonCombinations = cellfun(@str2num,gd.Stimuli.list.Data(:,1),'UniformOutput',false);
         Experiment.stim.numPerBlock = cell2mat(gd.Stimuli.list.Data(:,2));
         
-        Experiment.stim.setup = cell2table(gd.Stimuli.ports.Data(:,1:3),'VariableNames',{'Name','Port','Active'});
+        Experiment.stim.setup = cell2table(gd.Stimuli.ports.Data,'VariableNames',{'Name','Port','Active','DAQ'});
         ActivePistons = unique([Experiment.stim.pistonCombinations{:}]);        % determine active pistons
         Experiment.stim.setup.Active(1:size(Experiment.stim.setup,1)) = false;
         Experiment.stim.setup.Active(ActivePistons) = true;                     % set requested pistons as active
@@ -1163,9 +1161,6 @@ if hObject.Value
         Experiment.params.delay = str2double(gd.Parameters.delay.String);
         
         %% Initialize NI-DAQ session
-        for index = find([gd.Stimuli.ports.Data{:,4}])
-            gd.Stimuli.ports.Data{index,4} = false; % deactivate toggles (all pistons set to 0 on first trial)
-        end
         
         DAQ = initDAQ(gd.Stimuli.ports,gd.Experiment.params.samplingFrequency); % initialize DAQ
         DAQ.IsContinuous = true;                        % set session to be continuous (call's 'DataRequired' listener)
@@ -1174,14 +1169,14 @@ if hObject.Value
         % Add ports
         
         % Imaging Computer Trigger (for timing)
-        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line0','OutputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID{1},'port0/line0','OutputOnly');
         DAQ.Channels(id).Name = 'O_EventTrigger';
-        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line1','InputOnly');
+        [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID{1},'port0/line1','InputOnly');
         DAQ.Channels(id).Name = 'I_FrameCounter'; 
         
 %         % Running Wheel
 %         if Experiment.params.runSpeed
-%             [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line5:7','InputOnly');
+%             [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID{1},'port0/line5:7','InputOnly');
 %             DAQ.Channels(id(1)).Name = 'I_RunWheelA';
 %             DAQ.Channels(id(2)).Name = 'I_RunWheelB';
 %             DAQ.Channels(id(3)).Name = 'I_RunWheelIndex';
@@ -1189,15 +1184,15 @@ if hObject.Value
         
         % Trial Imaging
         if strcmp(Experiment.imaging.ImagingMode,'Trial Imaging')
-            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line19','OutputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID{1},'port0/line19','OutputOnly');
             DAQ.Channels(id).Name = 'O_ImagingTrigger';
         end
         
         % Whisker tracking
         if Experiment.params.whiskerTracking
-            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line17','OutputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID{1},'port0/line4','OutputOnly');
             DAQ.Channels(id).Name = 'O_WhiskerTracker';
-            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID,'port0/line18','InputOnly');
+            [~,id] = DAQ.addDigitalChannel(gd.Internal.DAQ.ID{1},'port0/line3','InputOnly');
             DAQ.Channels(id).Name = 'I_WhiskerTracker';
         end
         
@@ -1209,12 +1204,12 @@ if hObject.Value
         
 %         % Add clock
 %         daqClock = daq.createSession('ni');
-%         daqClock.addCounterOutputChannel(gd.Internal.DAQ.ID,0,'PulseGeneration');
+%         daqClock.addCounterOutputChannel(gd.Internal.DAQ.ID{1},0,'PulseGeneration');
 %         clkTerminal = daqClock.Channels(1).Terminal;
 %         daqClock.Channels(1).Frequency = DAQ.Rate;
 %         daqClock.IsContinuous = true;
 %         daqClock.startBackground;
-%         DAQ.addClockConnection('External',[gd.Internal.DAQ.ID,'/',clkTerminal],'ScanClock');
+%         DAQ.addClockConnection('External',[gd.Internal.DAQ.ID{1},'/',clkTerminal],'ScanClock');
         
         % Add Callbacks
         DAQ.addlistener('DataRequired', @QueueData);    % create listener for queueing trials
@@ -1239,7 +1234,7 @@ if hObject.Value
             Experiment.stim.stim(index,ismember(List,Experiment.stim.pistonCombinations{index})) = true;              % used for analysis
         end
         PistonCombinations = false(numStimuli-Experiment.params.catchTrials,numOutChannels);
-        PistonDict = find(~cellfun(@isempty,strfind({DAQ.Channels(:).Name},'Piston')));
+        PistonDict = find(~cellfun(@isempty,strfind({DAQ.Channels(:).Name},'Piezo')));
         for index = 1+Experiment.params.catchTrials:numStimuli
             PistonCombinations(index-Experiment.params.catchTrials,PistonDict(Experiment.stim.stim(index,:))) = true; % used for queueing
         end
@@ -1254,7 +1249,7 @@ if hObject.Value
         Experiment.Triggers = zeros(Experiment.timing.numScansPerTrial, numOutChannels);
         
         % Trigger piezos
-        Experiment.PistonTrigger = generateTriggers(gd);
+        Experiment.PistonTrigger = generateTriggers(Experiment);
         startTrig = find(Experiment.PistonTrigger,1,'first');
         endTrig = find(Experiment.PistonTrigger,1,'last');
 %         startTrig = max(floor(Experiment.params.samplingFrequency * Experiment.timing.ITI),1);    % start after ITI
@@ -1277,7 +1272,7 @@ if hObject.Value
         
         % Trigger whisker tracking camera on every single trial
         if Experiment.params.whiskerTracking
-            WTstartTrig = max(startTrig - Experiment.params.samplingFrequency/.1,1); % start 100ms earlier than stim
+            WTstartTrig = max(startTrig - round(.1*Experiment.params.samplingFrequency),1); % start 100ms earlier than stim
             if ~gd.Parameters.wtType.Value	% single trigger per frame
                 Experiment.Triggers(WTstartTrig:ceil(DAQ.Rate/Experiment.params.frameRateWT):endTrig, strcmp(OutChannels,'O_WhiskerTracker')) = 1; % image during stimulus period
             else                            % single trigger per trial
@@ -1533,6 +1528,7 @@ end
                 fprintf(WTUDP,'%d',RunIndex+1);
             end
             
+            fprintf('\t\t\tT%d complete', RunIndex); % display running speed
 %             % Calculate mean running speed
 %             TrialInfo.RunSpeed(RunIndex) = mean(dx_dt(currentStim==RunIndex)); % calculate mean running speed during stimulus
 %             fprintf('\t\t\tT%d S%d RunSpeed= %.2f', RunIndex, TrialInfo.StimID(RunIndex), TrialInfo.RunSpeed(RunIndex)); % display running speed
