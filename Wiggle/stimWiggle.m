@@ -296,21 +296,21 @@ gd.Stimuli2.wailDurationText = uicontrol(...
     'HorizontalAlignment',  'right',...
     'Units',                'normalized',...
     'Position',             [0,.2,.35,.1]);
-% % bidirectional toggle
-% gd.Stimuli2.bidirectional = uicontrol(...
-%     'Style',                'checkbox',...
-%     'Parent',               gd.Stimuli2.panel,...
-%     'Value',               gd.Experiment.stim.bidirectional,...
-%     'Units',                'normalized',...
-%     'Position',             [.9,.2,.1,.15],...
-%     'Callback',             @(hObject,eventdata)ChangeWail(hObject, eventdata, guidata(hObject)));
-% gd.Stimuli2.bidirectionalText = uicontrol(...
-%     'Style',                'text',...
-%     'Parent',               gd.Stimuli2.panel,...
-%     'String',               'Bidirectional',...
-%     'HorizontalAlignment',  'right',...
-%     'Units',                'normalized',...
-%     'Position',             [.5,.2,.35,.1]);
+% bidirectional toggle
+gd.Stimuli2.bidirectional = uicontrol(...
+    'Style',                'checkbox',...
+    'Parent',               gd.Stimuli2.panel,...
+    'Value',               gd.Experiment.stim.bidirectional,...
+    'Units',                'normalized',...
+    'Position',             [.9,.2,.1,.15],...
+    'Callback',             @(hObject,eventdata)ChangeWail(hObject, eventdata, guidata(hObject)));
+gd.Stimuli2.bidirectionalText = uicontrol(...
+    'Style',                'text',...
+    'Parent',               gd.Stimuli2.panel,...
+    'String',               'Bidirectional',...
+    'HorizontalAlignment',  'right',...
+    'Units',                'normalized',...
+    'Position',             [.5,.2,.35,.1]);
 % View triggers
 gd.Stimuli2.view = uicontrol(...
     'Style',                'togglebutton',...
@@ -815,13 +815,13 @@ if get(gd.Stimuli2.view,'Value')
 end
 end
 
-% function ChangeWail(hObject, eventdata, gd)
-% gd.Experiment.stim.bidirectional = get(hObject,'Value');
-% guidata(hObject,gd);
-% if get(gd.Stimuli2.view,'Value')
-%     ViewTriggers(gd.Stimuli2.view, [], gd);
-% end
-% end
+function ChangeWail(hObject, eventdata, gd)
+gd.Experiment.stim.bidirectional = get(hObject,'Value');
+guidata(hObject,gd);
+if get(gd.Stimuli2.view,'Value')
+    ViewTriggers(gd.Stimuli2.view, [], gd);
+end
+end
 
 function gd=refresh(gd) 
 gd.Experiment.timing.stimDuration = str2double(gd.Parameters.stimDur.String);
@@ -845,15 +845,12 @@ if get(hObject,'Value')
         figure(gd.Internal.viewHandle);
     end
     cla; hold on;
-    Color = {'r','b','g','c'};
     x = 0:1/Fs:(size(Triggers,1)-1)/Fs;
-    for index = 1:2
-        plot(x,Triggers(:,index),Color{index});
-    end
+    plot(x,Triggers);
     axis tight
     ylabel('Voltage');
     xlabel('Time (s)');
-    legend('Piezo','Frames','Location','best'); legend boxoff;
+    legend('Piezo','Location','best'); legend boxoff;
     hold off;
 else
     if ~isempty(gd.Internal.viewHandle) && ishghandle(gd.Internal.viewHandle) % figure doesn't exist
@@ -918,17 +915,17 @@ t = (0:1/Fs:duration/2)';
 halfwave = -0.5*cos(2*pi*f*t)+0.5;
 
 % Create wave
-% if ~bidirectional
+if ~bidirectional
     wave = [halfwave;flip(halfwave)];
-% else
-%     
-%     % Create full wave
-%     f = 1/(2*duration);
-%     t = (0:1/Fs:duration)';
-%     midwave = cos(2*pi*f*t);
-%     
-%     wave = [halfwave;midwave;-flip(halfwave)];
-% end
+else
+    
+    % Create full wave
+    f = 1/(2*duration);
+    t = (0:1/Fs:duration)';
+    midwave = cos(2*pi*f*t);
+    
+    wave = [halfwave;midwave;-flip(halfwave)];
+end
 
 % Determine if duration of wave is longer than single period for desired frequency
 numScansPerWail = round(1/freq*Fs);
