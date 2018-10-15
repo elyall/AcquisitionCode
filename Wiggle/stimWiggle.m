@@ -32,7 +32,7 @@ gd.Experiment.timing.randomITImax = 2;    % in seconds
 gd.Experiment.stim.frequency = 16;          % hz
 gd.Experiment.stim.wailDuration = 0.02;     % seconds
 gd.Experiment.stim.voltage = 5;             % volts
-gd.Experiment.stim.bidirectional = false;   % boolean
+gd.Experiment.stim.bidirectional = true;    % boolean
 
 gd.Experiment.params.samplingFrequency = 30000;
 gd.Experiment.params.numBlocks = 20;            % positive integer: default # of blocks to present
@@ -846,14 +846,14 @@ if get(hObject,'Value')
     end
     cla; hold on;
     x = 0:1/Fs:(size(Triggers,1)-1)/Fs;
-    yyaxis left;
+%     yyaxis left;
     plot(x,Triggers);
     axis tight
     ylabel('Voltage (V)');
     xlabel('Time (s)');
-    yyaxis right;
-    plot(x,[0;diff(Triggers)]);
-    ylabel('dVoltage');
+%     yyaxis right;
+%     plot(x,[0;diff(Triggers)]);
+%     ylabel('dVoltage');
 %     legend('Piezo','Location','best'); legend boxoff;
     hold off;
 else
@@ -1252,9 +1252,9 @@ if hObject.Value
         % Trigger piezos
         Experiment.PistonTrigger = generateTriggers(Experiment);
         startTrig = find(Experiment.PistonTrigger,1,'first');
-        endTrig = find(Experiment.PistonTrigger,1,'last');
+%         endTrig = find(Experiment.PistonTrigger,1,'last');
 %         startTrig = max(floor(Experiment.params.samplingFrequency * Experiment.timing.ITI),1);    % start after ITI
-%         endTrig = Experiment.timing.numScansPerTrial-1;                                           % end on last trigger of trial
+        endTrig = Experiment.timing.numScansPerTrial-1;                                           % end on last trigger of trial
 %         Experiment.PistonTrigger = zeros(Experiment.timing.numScansPerTrial, 1);
 %         Experiment.PistonTrigger(startTrig:endTrig) = Triggers;
         
