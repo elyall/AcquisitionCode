@@ -29,8 +29,8 @@ gd.Experiment.timing.stimDuration = 1;    % in seconds
 gd.Experiment.timing.ITI = 2;             % in seconds
 gd.Experiment.timing.randomITImax = 2;    % in seconds
 
-gd.Experiment.stim.frequency = 10;          % hz
-gd.Experiment.stim.wailDuration = 0.0499;   % seconds
+gd.Experiment.stim.frequency = 16;          % hz
+gd.Experiment.stim.wailDuration = 0.02;     % seconds
 gd.Experiment.stim.voltage = 5;             % volts
 gd.Experiment.stim.bidirectional = false;   % boolean
 
@@ -846,11 +846,15 @@ if get(hObject,'Value')
     end
     cla; hold on;
     x = 0:1/Fs:(size(Triggers,1)-1)/Fs;
+    yyaxis left;
     plot(x,Triggers);
     axis tight
-    ylabel('Voltage');
+    ylabel('Voltage (V)');
     xlabel('Time (s)');
-    legend('Piezo','Location','best'); legend boxoff;
+    yyaxis right;
+    plot(x,[0;diff(Triggers)]);
+    ylabel('dVoltage');
+%     legend('Piezo','Location','best'); legend boxoff;
     hold off;
 else
     if ~isempty(gd.Internal.viewHandle) && ishghandle(gd.Internal.viewHandle) % figure doesn't exist
@@ -891,7 +895,6 @@ function Triggers = generateTriggers(Experiment)
 t = Experiment.timing;
 s = Experiment.stim;
 Fs = Experiment.params.samplingFrequency;
-Fr = 16; %gd.Experiment.imaging.frameRate;
 
 % Initialize Triggers
 trialDuration = t.stimDuration + t.ITI;
@@ -925,6 +928,7 @@ else
     midwave = cos(2*pi*f*t);
     
     wave = [halfwave;midwave;-flip(halfwave)];
+    wave = -wave; % forward first, then back
 end
 
 % Determine if duration of wave is longer than single period for desired frequency
