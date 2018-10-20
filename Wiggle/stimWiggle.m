@@ -944,7 +944,7 @@ single_stim = [wave;zeros(stim_lag,1)]; %single period
 numScansPerWail = numel(single_stim);
 
 % Build for entire duraiton
-numWails = floor(numScans/numScansPerWail);
+numWails = floor(numScans/numScansPerWail/2);
 trig = repmat(single_stim,numWails,1);
 
 end
@@ -1239,6 +1239,7 @@ if hObject.Value
         for index = 1+Experiment.params.catchTrials:numStimuli
             PistonCombinations(index-Experiment.params.catchTrials,PistonDict(Experiment.stim.stim(index,:))) = true; % used for queueing
         end
+        DelayStim = PistonDict(strcmp(Experiment.stim.setup.DAQ,'Dev5'));
         
         %% Create triggers
         
@@ -1608,7 +1609,10 @@ end
             if TrialInfo.StimID(currentTrial) ~= 0 % current trial is not control trial
                 CurrentTriggers(:,PistonCombinations(TrialInfo.StimID(currentTrial),:)) = repmat(PistonTrigger, 1, sum(PistonCombinations(TrialInfo.StimID(currentTrial),:)));
             end
-            
+            % USB DAQ ONLY - SPEED UP TRIGGERS TO GET TIMING RIGHT
+            n = round(DAQ.Rate*.0733);
+            CurrentTriggers(:,5) = [CurrentTriggers(n:end,5);zeros(n-1,numel(5))];
+             
             % Queue triggers & update buffer
             if ~MaxRandomScans                                          % do not add random ITI
                 TrialInfo.numRandomScansPost(currentTrial) = 0;
