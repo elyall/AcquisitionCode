@@ -944,7 +944,7 @@ single_stim = [wave;zeros(stim_lag,1)]; %single period
 numScansPerWail = numel(single_stim);
 
 % Build for entire duraiton
-numWails = floor(numScans/numScansPerWail/2);
+numWails = floor(numScans/numScansPerWail);
 trig = repmat(single_stim,numWails,1);
 
 end
